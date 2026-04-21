@@ -1,0 +1,666 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>700</width>
+    <height>720</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>700</width>
+    <height>720</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>오목 게임</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QMainWindow { background: #1a1a2e; }
+QTabWidget::pane { border:1px solid #2a2a4a; background:#16213e; }
+QTabBar::tab { background:#0f3460; color:#ccc; padding:8px 16px; font-weight:bold; }
+QTabBar::tab:selected { background:#e94560; color:white; }
+QTabBar::tab:hover { background:#1a4a80; }
+QGroupBox { color:#8888aa; border:1px solid #2a2a4a; border-radius:6px; margin-top:10px; padding-top:6px; font-weight:bold; }
+QGroupBox::title { subcontrol-origin:margin; left:10px; top:-2px; }
+QPushButton { background:#0f3460; color:white; border:none; padding:6px 16px; border-radius:5px; font-weight:bold; }
+QPushButton:hover { background:#e94560; }
+QPushButton:pressed { background:#b03040; }
+QPushButton:disabled { background:#222244; color:#555; }
+QLineEdit, QComboBox { background:#0d1117; color:white; border:1px solid #2a2a4a; border-radius:4px; padding:5px 8px; }
+QComboBox::drop-down { border:none; }
+QComboBox QAbstractItemView { background:#0d1117; color:white; }
+QTableWidget { background:#0d1117; color:white; gridline-color:#1e1e3a; border:1px solid #2a2a4a; selection-background-color:#0f3460; }
+QTableWidget QHeaderView::section { background:#0f3460; color:#ddd; padding:5px; border:none; font-weight:bold; }
+QTableWidget::item:alternate { background:#0e1525; }
+QListWidget { background:#0d1117; color:white; border:1px solid #2a2a4a; }
+QListWidget::item:selected { background:#0f3460; }
+QLabel { color:white; }
+QRadioButton { color:#ddd; }</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="centralLayout">
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <layout class="QHBoxLayout" name="appHeaderLayout">
+      <property name="spacing">
+       <number>10</number>
+      </property>
+      <property name="leftMargin">
+       <number>12</number>
+      </property>
+      <property name="topMargin">
+       <number>8</number>
+      </property>
+      <property name="rightMargin">
+       <number>12</number>
+      </property>
+      <property name="bottomMargin">
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="headerStatusLabel">
+        <property name="styleSheet">
+         <string notr="true">color:#9aa7d9; padding:4px 2px;</string>
+        </property>
+        <property name="text">
+         <string>게임 대기 중</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="appHeaderSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="accountLabel">
+        <property name="styleSheet">
+         <string notr="true">color:#cfd8ff; font-weight:bold; padding:4px 2px;</string>
+        </property>
+        <property name="text">
+         <string>로그인: -</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="logoutBtn">
+        <property name="minimumSize">
+         <size>
+          <width>88</width>
+          <height>30</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>120</width>
+          <height>32</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QPushButton{background:#663333;color:white;} QPushButton:hover{background:#994444;}</string>
+        </property>
+        <property name="text">
+         <string>로그아웃</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QTabWidget" name="tabs">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="QWidget" name="gameTab">
+       <attribute name="title">
+        <string>⚫  게임</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="gameTabLayout">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>10</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>6</number>
+        </property>
+        <item>
+         <widget class="QGroupBox" name="gameSettingGroup">
+          <property name="title">
+           <string>게임 설정</string>
+          </property>
+          <layout class="QHBoxLayout" name="gameSettingLayout">
+           <item>
+            <widget class="QLabel" name="playerLabel">
+             <property name="text">
+              <string>플레이어:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="playerCombo"/>
+           </item>
+           <item>
+            <widget class="QRadioButton" name="firstRadio">
+             <property name="text">
+              <string>흑 (선공)</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QRadioButton" name="secondRadio">
+             <property name="text">
+              <string>백 (후공)</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="startSingleBtn">
+             <property name="text">
+              <string>▶  AI 대전 시작</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pauseBtn">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>⏸  일시정지</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="rematchBtn">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>↻  재도전</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="leaveRoomBtn">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>🚪  방 나가기</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="turnTimerLabel">
+             <property name="minimumSize">
+              <size>
+               <width>74</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">color:#00ff88; font-size:16px; font-weight:bold; padding:3px 8px;</string>
+             </property>
+             <property name="text">
+              <string>30초</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="statusLabel">
+          <property name="styleSheet">
+           <string notr="true">color:#aaa; font-size:11px;</string>
+          </property>
+          <property name="text">
+           <string>플레이어를 선택하고 게임을 시작하세요.</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item alignment="Qt::AlignmentFlag::AlignHCenter">
+         <widget class="GameWidget" name="game"/>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="profileTab">
+       <attribute name="title">
+        <string>👤  프로필</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="profileTabLayout">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>10</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>10</number>
+        </property>
+        <item>
+         <widget class="QGroupBox" name="playerManageGroup">
+          <property name="title">
+           <string>플레이어 관리</string>
+          </property>
+          <layout class="QFormLayout" name="playerManageLayout">
+           <item row="0" column="0">
+            <widget class="QLabel" name="nickLabel">
+             <property name="text">
+              <string>닉네임 :</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QLineEdit" name="nickEdit">
+             <property name="placeholderText">
+              <string>닉네임 입력</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="commentLabel">
+             <property name="text">
+              <string>한마디 :</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QLineEdit" name="commentEdit">
+             <property name="placeholderText">
+              <string>한마디 (선택)</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <layout class="QHBoxLayout" name="profileButtonLayout">
+             <item>
+              <widget class="QPushButton" name="createBtn">
+               <property name="text">
+                <string>➕  추가</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="updateBtn">
+               <property name="text">
+                <string>✏️  내 프로필 수정</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="deletePlayerBtn">
+               <property name="text">
+                <string>🗑  삭제</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="playerTable"/>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="recordTab">
+       <attribute name="title">
+        <string>📊  전적</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="recordTabLayout">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>10</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>10</number>
+        </property>
+        <item>
+         <widget class="QGroupBox" name="recordSearchGroup">
+          <property name="title">
+           <string>🔍  검색</string>
+          </property>
+          <layout class="QHBoxLayout" name="recordSearchLayout">
+           <item>
+            <widget class="QLabel" name="recordPlayerLabel">
+             <property name="text">
+              <string>플레이어:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="recordPlayerCombo"/>
+           </item>
+           <item>
+            <widget class="QLabel" name="resultFilterLabel">
+             <property name="text">
+              <string>결과:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="resultFilterCombo"/>
+           </item>
+           <item>
+            <widget class="QPushButton" name="searchRecordBtn">
+             <property name="text">
+              <string>검색</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="multiSummaryGroup">
+          <property name="title">
+           <string>멀티 상대별 전적</string>
+          </property>
+          <layout class="QVBoxLayout" name="multiSummaryLayout">
+           <item>
+            <widget class="QTableWidget" name="multiSummaryTable">
+             <property name="maximumSize">
+              <size>
+               <width>16777215</width>
+               <height>170</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="recordTable"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="deleteRecordBtn">
+          <property name="text">
+           <string>🗑  선택 기록 삭제</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="multiTab">
+       <attribute name="title">
+        <string>🌐  멀티</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="multiTabLayout">
+        <property name="spacing">
+         <number>10</number>
+        </property>
+        <property name="leftMargin">
+         <number>14</number>
+        </property>
+        <property name="topMargin">
+         <number>14</number>
+        </property>
+        <property name="rightMargin">
+         <number>14</number>
+        </property>
+        <property name="bottomMargin">
+         <number>14</number>
+        </property>
+        <item>
+         <widget class="QGroupBox" name="modeGroup">
+          <property name="title">
+           <string>모드</string>
+          </property>
+          <layout class="QVBoxLayout" name="modeLayout">
+           <item>
+            <widget class="QRadioButton" name="hostRadio">
+             <property name="text">
+              <string>🏠  방 만들기 (Host)</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QRadioButton" name="joinRadio">
+             <property name="text">
+              <string>🔌  방 참가 (Join)</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="connectSettingGroup">
+          <property name="title">
+           <string>접속 설정</string>
+          </property>
+          <layout class="QFormLayout" name="connectSettingLayout">
+           <item row="0" column="0">
+            <widget class="QLabel" name="myIpLabel">
+             <property name="text">
+              <string>내 IP :</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QLineEdit" name="myIpEdit">
+             <property name="styleSheet">
+              <string notr="true">background:#0a0a1a; color:#00ff88; border:1px solid #2a2a4a; border-radius:4px; padding:5px;</string>
+             </property>
+             <property name="readOnly">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="multiPlayerLabel">
+             <property name="text">
+              <string>플레이어 :</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QComboBox" name="multiPlayerCombo"/>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="portLabel">
+             <property name="text">
+              <string>포트 :</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QLineEdit" name="portEdit">
+             <property name="text">
+              <string>7777</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0">
+            <widget class="QLabel" name="ipLabel">
+             <property name="text">
+              <string>호스트 IP :</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <widget class="QLineEdit" name="ipEdit">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>127.0.0.1</string>
+             </property>
+             <property name="placeholderText">
+              <string>호스트 IP 입력</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="multiButtonLayout">
+          <item>
+           <widget class="QPushButton" name="connectBtn">
+            <property name="text">
+             <string>🌐  방 만들기</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="cancelBtn">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton:enabled{background:#663333;color:white;} QPushButton:disabled{background:#222233;color:#555;}</string>
+            </property>
+            <property name="text">
+             <string>✕  취소</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="netStatusLabel">
+          <property name="styleSheet">
+           <string notr="true">color:#888; border:1px solid #333; border-radius:6px; padding:8px;</string>
+          </property>
+          <property name="text">
+           <string>연결되지 않음</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignCenter</set>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="playerListLabel">
+          <property name="styleSheet">
+           <string notr="true">color:#aaa; padding:6px;</string>
+          </property>
+          <property name="text">
+           <string>(없음)</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="multiStartBtn">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>44</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton:enabled{background:#e94560;font-size:14px;} QPushButton:disabled{background:#222244;color:#555;font-size:14px;}</string>
+          </property>
+          <property name="text">
+           <string>🚀  게임 시작!</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="multiVerticalSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>GameWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>gamewidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
