@@ -55,8 +55,8 @@ private:
 
     // ── 보드 상태 ─────────────────────────────────────────────────────────────
     static constexpr int BOARD = 15;    // 15x15
-    static constexpr int CELL  = 40;    // 셀 크기 px
-    static constexpr int MARGIN = 30;
+    static constexpr int CELL  = 36;    // 셀 크기 px
+    static constexpr int MARGIN = 24;
 
     int board[BOARD][BOARD] = {};       // 0=빈 1=흑 2=백
     int currentStone = 1;               // 현재 차례 돌 (1=흑 2=백)

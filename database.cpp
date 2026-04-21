@@ -20,7 +20,7 @@ bool Database::init()
     if (!db.open()) { qDebug() << db.lastError(); return false; }
 
     QSqlQuery q;
-    q.exec("CREATE TABLE IF NOT EXISTS players ("
+    if (!q.exec("CREATE TABLE IF NOT EXISTS players ("
            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
            "nickname TEXT UNIQUE NOT NULL,"
            "comment TEXT DEFAULT '',"
@@ -29,27 +29,38 @@ bool Database::init()
            "wins INTEGER DEFAULT 0,"
            "losses INTEGER DEFAULT 0,"
            "draws INTEGER DEFAULT 0,"
-           "created_at TEXT)");
+           "created_at TEXT)")) {
+        qDebug() << q.lastError();
+        return false;
+    }
 
     if (!ensurePlayerPasswordColumns()) return false;
     if (!ensurePlayerAvatarColumn())    return false;
-    if (!ensureRecordColumns())         return false;
 
-    q.exec("CREATE TABLE IF NOT EXISTS records ("
+    if (!q.exec("CREATE TABLE IF NOT EXISTS records ("
            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
            "player_id INTEGER,"
            "player_name TEXT,"
            "opponent TEXT,"
            "result TEXT,"
            "moves INTEGER DEFAULT 0,"
-           "played_at TEXT)");
+           "duration_seconds INTEGER DEFAULT 0,"
+           "my_stone INTEGER DEFAULT 0,"
+           "played_at TEXT)")) {
+        qDebug() << q.lastError();
+        return false;
+    }
+    if (!ensureRecordColumns()) return false;
 
-    q.exec("CREATE TABLE IF NOT EXISTS friends ("
+    if (!q.exec("CREATE TABLE IF NOT EXISTS friends ("
            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
            "player_id INTEGER,"
            "friend_name TEXT,"
            "favorite INTEGER DEFAULT 0,"
-           "added_at TEXT)");
+           "added_at TEXT)")) {
+        qDebug() << q.lastError();
+        return false;
+    }
 
     initialized = true;
     return true;

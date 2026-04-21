@@ -50,7 +50,7 @@ QPushButton:hover { background:#e94560; }</string>
    <item>
     <widget class="QTabWidget" name="tabs">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="loginPage">
       <attribute name="title">

@@ -29,7 +29,14 @@ void NetworkManager::join(const QString& addr, quint16 port)
 
 void NetworkManager::onNewConnection()
 {
-    if (sock) return;
+    if (sock) {
+        QTcpSocket* extra = server->nextPendingConnection();
+        if (extra) {
+            extra->disconnectFromHost();
+            extra->deleteLater();
+        }
+        return;
+    }
     sock = server->nextPendingConnection();
     connect(sock, &QTcpSocket::disconnected, this, &NetworkManager::onDisconnected);
     connect(sock, &QTcpSocket::readyRead,    this, &NetworkManager::onReadyRead);
@@ -38,7 +45,15 @@ void NetworkManager::onNewConnection()
 }
 
 void NetworkManager::onConnected()    { emit peerConnected(); }
-void NetworkManager::onDisconnected() { sock = nullptr; emit peerDisconnected(); }
+void NetworkManager::onDisconnected()
+{
+    QTcpSocket* disconnectedSocket = qobject_cast<QTcpSocket*>(sender());
+    if (disconnectedSocket && disconnectedSocket == sock) {
+        sock = nullptr;
+        disconnectedSocket->deleteLater();
+    }
+    emit peerDisconnected();
+}
 void NetworkManager::onSocketError(QAbstractSocket::SocketError)
 { if (sock) emit networkError(sock->errorString()); }
 
@@ -61,6 +76,7 @@ void NetworkManager::sendJson(const QJsonObject& obj)
 {
     if (!sock || sock->state() != QAbstractSocket::ConnectedState) return;
     sock->write(QJsonDocument(obj).toJson(QJsonDocument::Compact) + "\n");
+    sock->flush();
 }
 
 void NetworkManager::closeAll()

@@ -63,6 +63,8 @@ private:
     void setupRecordTab();
     void setupMultiTab();
     void startNetworkGame(int hostStone = 1);
+    void startNetworkGameWithStone(int myStone, const QString& blackName = QString(),
+                                   const QString& whiteName = QString());
     void tryStartRematch();
     void handleRoomLeft(const QString& message);
     void applyLoggedInPlayer(const Player& player);

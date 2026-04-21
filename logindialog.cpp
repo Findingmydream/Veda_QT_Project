@@ -102,13 +102,13 @@ void LoginDialog::onRegister()
         qInfo() << "[Auth] Register success:" << nick << "(id:" << created.id << ")";
     }
 
-    if (!Database::instance().authenticatePlayer(nick, password, &loggedIn_)) {
-        qInfo() << "[Auth] Auto-login failed after register:" << nick;
-        QMessageBox::warning(this, "알림", "계정은 생성됐지만 자동 로그인에 실패했습니다.");
-        return;
-    }
-
-    qInfo() << "[Auth] Auto-login success after register:" << loggedIn_.nickname
-            << "(id:" << loggedIn_.id << ")";
-    accept();
+    ui->loginNickEdit->setText(nick);
+    ui->loginPasswordEdit->clear();
+    ui->loginMessageLabel->setText("회원가입이 완료되었습니다. 비밀번호를 입력해 로그인하세요.");
+    ui->registerPasswordEdit->clear();
+    ui->registerConfirmEdit->clear();
+    ui->registerMessageLabel->clear();
+    ui->tabs->setCurrentWidget(ui->loginPage);
+    ui->loginPasswordEdit->setFocus();
+    qInfo() << "[Auth] Register complete, waiting for explicit login:" << nick;
 }

@@ -247,6 +247,9 @@ void GameWidget::mousePressEvent(QMouseEvent* e)
 // ── 착수 공통 처리 ────────────────────────────────────────────────────────────
 bool GameWidget::placeStone(int r, int c)
 {
+    if (r < 0 || r >= BOARD || c < 0 || c >= BOARD) return false;
+    if (board[r][c] != 0) return false;
+
     if (isForbiddenDoubleThree(r, c, currentStone)) {
         forbiddenR = r;
         forbiddenC = c;
@@ -415,10 +418,12 @@ void GameWidget::handleNetMessage(const QJsonObject& obj)
     if (obj["t"].toString() == "move") {
         int r = obj["r"].toInt();
         int c = obj["c"].toInt();
+        if (!netMode || !playing || gameOver_ || paused_ || myTurn) return;
         placeStone(r, c);
     }
     else if (obj["t"].toString() == "timeout") {
         int winnerStone = obj["winnerStone"].toInt();
+        if (!playing || gameOver_ || (winnerStone != 1 && winnerStone != 2)) return;
         endGame(winnerStone);
     }
 }

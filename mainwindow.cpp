@@ -25,6 +25,13 @@
 #include "recordstable.h"
 #include "titles.h"
 
+namespace {
+QString stoneName(int stone)
+{
+    return stone == 1 ? QStringLiteral("흑") : QStringLiteral("백");
+}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 MainWindow::MainWindow(const Player& loggedInPlayer, QWidget* parent)
     : QMainWindow(parent)
@@ -170,15 +177,16 @@ void MainWindow::onRematch()
     if (!netManager || !netManager->isConnected()) return;
 
     localRematchRequested = true;
+    remoteRematchRequested = false;
     ui->rematchBtn->setEnabled(false);
     ui->rematchBtn->setText("상대 대기 중");
     statusLabel->setText("재도전 요청을 보냈습니다.");
     updateHeaderStatus("재도전 대기 중");
 
     QJsonObject msg;
-    msg["t"] = "rematch";
+    msg["t"] = "rematch_request";
+    msg["name"] = multiPlayerCombo->currentText();
     netManager->sendJson(msg);
-    tryStartRematch();
 }
 
 void MainWindow::onLeaveRoom()
@@ -393,7 +401,7 @@ void MainWindow::onNickEditToggle()
             return;
         }
         if (newNick != loggedInPlayer_.nickname) {
-            if (!Database::instance().updatePlayer(loggedInPlayer_.id, newNick, QString())) {
+            if (!Database::instance().updatePlayer(loggedInPlayer_.id, newNick, loggedInPlayer_.comment)) {
                 QMessageBox::warning(this, "알림", "닉네임 변경에 실패했습니다.");
                 return;
             }
@@ -878,18 +886,58 @@ void MainWindow::onNetMessage(QJsonObject obj)
     }
     else if (t == "start") {
         int hostStone = obj["hostStone"].toInt(1);
-        startNetworkGame(hostStone);
+        QString blackName = obj["blackName"].toString();
+        QString whiteName = obj["whiteName"].toString();
+        startNetworkGameWithStone(iAmHost
+            ? ((hostStone == 2) ? 2 : 1)
+            : ((hostStone == 2) ? 1 : 2),
+            blackName, whiteName);
     }
-    else if (t == "rematch") {
+    else if (t == "rematch_request" || t == "rematch") {
         remoteRematchRequested = true;
-        if (!localRematchRequested) {
-            ui->rematchBtn->setVisible(true);
-            ui->rematchBtn->setEnabled(true);
-            ui->rematchBtn->setText("↻  재도전");
-            statusLabel->setText(remotePlayerName + "님이 재도전을 요청했습니다.");
-            updateHeaderStatus("재도전 요청 받음");
+        QString requester = obj["name"].toString();
+        if (requester.isEmpty()) requester = remotePlayerName.isEmpty() ? "상대방" : remotePlayerName;
+
+        if (localRematchRequested) {
+            QJsonObject accepted;
+            accepted["t"] = "rematch_accept";
+            netManager->sendJson(accepted);
+            if (iAmHost) tryStartRematch();
+            return;
         }
-        tryStartRematch();
+
+        QMessageBox box(this);
+        box.setWindowTitle("재도전 요청");
+        box.setText(requester + "님이 재도전을 요청했습니다.");
+        box.setInformativeText("한 판 더 진행할까요?");
+        auto* acceptBtn = box.addButton("수락", QMessageBox::AcceptRole);
+        box.addButton("거절", QMessageBox::RejectRole);
+        box.setDefaultButton(qobject_cast<QPushButton*>(acceptBtn));
+        box.exec();
+
+        if (box.clickedButton() == acceptBtn) {
+            localRematchRequested = true;
+            statusLabel->setText("재도전을 수락했습니다.");
+            updateHeaderStatus("재도전 시작 준비");
+            QJsonObject accepted;
+            accepted["t"] = "rematch_accept";
+            netManager->sendJson(accepted);
+            if (iAmHost) tryStartRematch();
+        } else {
+            QJsonObject rejected;
+            rejected["t"] = "rematch_reject";
+            netManager->sendJson(rejected);
+            handleRoomLeft("재도전 요청을 거절했습니다.");
+        }
+    }
+    else if (t == "rematch_accept") {
+        remoteRematchRequested = true;
+        statusLabel->setText("상대방이 재도전을 수락했습니다.");
+        updateHeaderStatus("재도전 시작 준비");
+        if (iAmHost) tryStartRematch();
+    }
+    else if (t == "rematch_reject") {
+        handleRoomLeft("상대방이 재도전을 거절했습니다.");
     }
     else if (t == "leave") {
         handleRoomLeft("상대방이 방을 나갔습니다.");
@@ -901,24 +949,39 @@ void MainWindow::onNetMessage(QJsonObject obj)
 
 void MainWindow::onMultiStart()
 {
-    int hostStone = QRandomGenerator::global()->bounded(2) + 1;
+    QString hostName = multiPlayerCombo->currentText();
+    QString guestName = remotePlayerName.isEmpty() ? "상대방" : remotePlayerName;
+    const bool hostBlack = (QRandomGenerator::global()->bounded(2) == 0);
+    const int hostStone = hostBlack ? 1 : 2;
+    const QString blackName = hostBlack ? hostName : guestName;
+    const QString whiteName = hostBlack ? guestName : hostName;
+
     QJsonObject msg;
     msg["t"] = "start";
     msg["hostStone"] = hostStone;
+    msg["blackName"] = blackName;
+    msg["whiteName"] = whiteName;
     netManager->sendJson(msg);
-    startNetworkGame(hostStone);
+    startNetworkGameWithStone(hostStone, blackName, whiteName);
 }
 
 void MainWindow::startNetworkGame(int hostStone)
+{
+    const int myStone = iAmHost
+        ? ((hostStone == 2) ? 2 : 1)
+        : ((hostStone == 2) ? 1 : 2);
+    startNetworkGameWithStone(myStone);
+}
+
+void MainWindow::startNetworkGameWithStone(int myStone, const QString& blackName,
+                                           const QString& whiteName)
 {
     QString myName = multiPlayerCombo->currentText();
     if (remotePlayerName.isEmpty()) remotePlayerName = "상대방";
     currentOpponentName = remotePlayerName;
     localRematchRequested = false;
     remoteRematchRequested = false;
-    const int myStone = iAmHost
-        ? ((hostStone == 2) ? 2 : 1)
-        : ((hostStone == 2) ? 1 : 2);
+
     game->startNetwork(myStone, netManager, myName, remotePlayerName);
     ui->pauseBtn->setEnabled(true);
     ui->pauseBtn->setText("⏸  일시정지");
@@ -928,9 +991,23 @@ void MainWindow::startNetworkGame(int hostStone)
     ui->leaveRoomBtn->setVisible(true);
     ui->leaveRoomBtn->setEnabled(true);
     multiStartBtn->setEnabled(false);
-    const QString stoneText = (myStone == 1) ? "흑" : "백";
-    netStatusLabel->setText(QString("🟢  대전 시작! 내 돌: %1").arg(stoneText));
-    updateHeaderStatus(QString("멀티 대전 중 - %1 (%2)").arg(remotePlayerName, stoneText));
+
+    const int opponentStone = (myStone == 1) ? 2 : 1;
+    QString black = blackName;
+    QString white = whiteName;
+    if (black.isEmpty() || white.isEmpty()) {
+        black = (myStone == 1) ? myName : remotePlayerName;
+        white = (myStone == 2) ? myName : remotePlayerName;
+    }
+
+    playerListLabel->setText(
+        QString("🔵  %1  (나, %2)\n🟢  %3  (상대, %4)")
+            .arg(myName, stoneName(myStone), remotePlayerName, stoneName(opponentStone)));
+    netStatusLabel->setText(QString("🟢  대전 시작! 흑: %1 / 백: %2")
+        .arg(black, white));
+    statusLabel->setText(QString("%1(%2) vs %3(%4)")
+        .arg(myName, stoneName(myStone), remotePlayerName, stoneName(opponentStone)));
+    updateHeaderStatus(QString("멀티 대전 중 - 내 돌: %1").arg(stoneName(myStone)));
     tabs->setCurrentIndex(0);
     QTimer::singleShot(100, this, [this]{ game->setFocus(); });
 }
@@ -942,12 +1019,20 @@ void MainWindow::tryStartRematch()
         return;
     }
 
-    const int hostStone = QRandomGenerator::global()->bounded(2) + 1;
+    QString hostName = multiPlayerCombo->currentText();
+    QString guestName = remotePlayerName.isEmpty() ? "상대방" : remotePlayerName;
+    const bool hostBlack = (QRandomGenerator::global()->bounded(2) == 0);
+    const int hostStone = hostBlack ? 1 : 2;
+    const QString blackName = hostBlack ? hostName : guestName;
+    const QString whiteName = hostBlack ? guestName : hostName;
+
     QJsonObject msg;
     msg["t"] = "start";
     msg["hostStone"] = hostStone;
+    msg["blackName"] = blackName;
+    msg["whiteName"] = whiteName;
     netManager->sendJson(msg);
-    startNetworkGame(hostStone);
+    startNetworkGameWithStone(hostStone, blackName, whiteName);
 }
 
 void MainWindow::handleRoomLeft(const QString& message)
