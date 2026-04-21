@@ -6,16 +6,20 @@
 #include <QPoint>
 
 class NetworkManager;
+class GeminiClient;
 class QTimer;
 
 class GameWidget : public QWidget
 {
     Q_OBJECT
 public:
+    enum class AIDifficulty { Easy, Medium, Hard };
+
     explicit GameWidget(QWidget* parent = nullptr);
 
     // 싱글 (vs AI)
-    void startSingle(const QString& playerName, bool playerFirst = true);
+    void startSingle(const QString& playerName, bool playerFirst = true,
+                     AIDifficulty difficulty = AIDifficulty::Easy);
 
     // 멀티
     void startNetwork(int myStoneColor, NetworkManager* net,
@@ -25,12 +29,14 @@ public:
     void resetToIdle();
     bool isPaused() const;
     void setPaused(bool paused);
+    int  myStoneColor() const { return myStone; }
 
 signals:
     void gameFinished(QString winner, int moves, int durationSeconds, int myStone); // 게임 끝날 때
     void ruleViolation(QString message);
     void turnTimeChanged(int secondsLeft, bool urgent);
     void turnTimedOut(QString message);
+    void livesChanged(int livesBlack, int livesWhite);
 
 public slots:
     void handleNetMessage(const QJsonObject& obj);
@@ -44,7 +50,15 @@ private:
     void   resetBoard();
     bool   checkWin(int r, int c, int stone) const;
     void   doAiMove();
+    void   doAiMoveEasy();
+    void   doAiMoveMedium();
+    void   doAiMoveHard();
+    void   onGeminiTextReady(const QString& text);
+    void   onGeminiFailed(const QString& reason);
+    QString buildGeminiPrompt(int aiStone) const;
     int    aiScore(int r, int c, int stone) const;
+    int    evalLineMedium(const QVector<int>& line, int center, int stone) const;
+    int    evalCellMedium(int r, int c, int stone) const;
     bool   placeStone(int r, int c);     // 공용 착수 처리
     void   endGame(int winner);          // 0=무 1=흑 2=백
     bool   isForbiddenDoubleThree(int r, int c, int stone);
@@ -67,6 +81,9 @@ private:
     bool gameOver_   = false;
     bool paused_     = false;
     int  secondsLeft_ = 30;
+    static constexpr int MAX_LIVES = 3;
+    int  livesBlack_ = MAX_LIVES;
+    int  livesWhite_ = MAX_LIVES;
     QTimer* turnTimer_ = nullptr;
     QString winner_;
 
@@ -79,6 +96,9 @@ private:
     // ── 네트워크 ──────────────────────────────────────────────────────────────
     NetworkManager* net_    = nullptr;
     bool            netMode = false;
+    AIDifficulty    aiDifficulty_ = AIDifficulty::Easy;
+    GeminiClient*   geminiClient_ = nullptr;
+    bool            aiThinking_   = false;
 
     // ── 마지막 착수 위치 (강조 표시용) ───────────────────────────────────────
     int lastR = -1, lastC = -1;

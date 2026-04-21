@@ -29,6 +29,7 @@ struct GameRecord {
     int     moves           = 0;
     int     durationSeconds = 0;
     int     myStone         = 0;   // 1=흑 2=백 0=미상
+    QString myTitle;
     QString opponentTitle;
     QDateTime playedAt;
 };

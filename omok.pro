@@ -18,7 +18,8 @@ SOURCES += \
     playersearchdialog.cpp \
     cameracapturedialog.cpp \
     playerdetaildialog.cpp \
-    recordstable.cpp
+    recordstable.cpp \
+    geminiclient.cpp
 
 HEADERS += \
     logindialog.h \
@@ -31,7 +32,8 @@ HEADERS += \
     cameracapturedialog.h \
     playerdetaildialog.h \
     recordstable.h \
-    titles.h
+    titles.h \
+    geminiclient.h
 
 FORMS += \
     mainwindow.ui \

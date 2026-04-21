@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QRadioButton>
 #include <QRandomGenerator>
+#include <QMenu>
 #include "gamewidget.h"
 #include "networkmanager.h"
 #include "database.h"
@@ -45,7 +46,6 @@ private slots:
 
     // ── 전적 탭 (내 게임 기록) ────────────────────────────────────────────────
     void onMyRecordsRefresh();
-    void onDeleteMyRecord();
     void onDeleteAllMyRecords();
 
     // ── 멀티 탭 ───────────────────────────────────────────────────────────────
@@ -91,6 +91,9 @@ private:
     QLabel*      turnLabel;
     QLabel*      statusLabel;
     QRadioButton* firstRadio;
+    QPushButton*  aiDifficultyBtn = nullptr;
+    GameWidget::AIDifficulty currentAIDifficulty = GameWidget::AIDifficulty::Easy;
+    QLabel*       livesLabel = nullptr;
 
     // ── 프로필 탭 (재구성) ────────────────────────────────────────────────────
     QLabel*       profileAvatar        = nullptr;
@@ -128,7 +131,6 @@ private:
     // ── 전적 탭 (내 게임 기록) ────────────────────────────────────────────────
     QComboBox*    myRecordsResultCombo = nullptr;
     QTableWidget* myRecordsTable       = nullptr;
-    QPushButton*  myRecordsDeleteBtn   = nullptr;
     QPushButton*  myRecordsDeleteAllBtn = nullptr;
 
     // ── 멀티 탭 ───────────────────────────────────────────────────────────────

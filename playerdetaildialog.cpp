@@ -81,7 +81,7 @@ PlayerDetailDialog::PlayerDetailDialog(const Player& player, QWidget* parent)
     auto* personalTab = new QWidget;
     auto* personalLay = new QVBoxLayout(personalTab);
     personalTable_ = new QTableWidget;
-    RecordsTable::setupColumns(personalTable_, /*includePlayerColumn=*/false);
+    RecordsTable::setupColumns(personalTable_, /*includePlayerColumn=*/false, /*fillWidth=*/false);
     personalLay->addWidget(personalTable_, 1);
     statsTabs->addTab(personalTab, "개인 전적");
 
@@ -109,7 +109,7 @@ PlayerDetailDialog::PlayerDetailDialog(const Player& player, QWidget* parent)
     oppLay->addWidget(oppStatsBox);
 
     opponentTable_ = new QTableWidget;
-    RecordsTable::setupColumns(opponentTable_, /*includePlayerColumn=*/false);
+    RecordsTable::setupColumns(opponentTable_, /*includePlayerColumn=*/false, /*fillWidth=*/false);
     oppLay->addWidget(opponentTable_, 1);
 
     statsTabs->addTab(oppTab, "상대 전적");

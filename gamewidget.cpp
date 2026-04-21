@@ -1,5 +1,6 @@
 #include "gamewidget.h"
 #include "networkmanager.h"
+#include "geminiclient.h"
 
 #include <QPainter>
 #include <QMouseEvent>
@@ -7,12 +8,19 @@
 #include <QRandomGenerator>
 #include <QFont>
 #include <QTimer>
+#include <QDebug>
+#include <QRegularExpression>
 
 GameWidget::GameWidget(QWidget* parent) : QWidget(parent)
 {
     turnTimer_ = new QTimer(this);
     turnTimer_->setInterval(1000);
     connect(turnTimer_, &QTimer::timeout, this, &GameWidget::onTurnTimerTick);
+
+    geminiClient_ = new GeminiClient(this);
+    connect(geminiClient_, &GeminiClient::textReady, this, &GameWidget::onGeminiTextReady);
+    connect(geminiClient_, &GeminiClient::failed,    this, &GameWidget::onGeminiFailed);
+
     setFixedSize(sizeHint());
     resetBoard();
 }
@@ -24,13 +32,15 @@ QSize GameWidget::sizeHint() const
 }
 
 // ── 시작 ─────────────────────────────────────────────────────────────────────
-void GameWidget::startSingle(const QString& playerName, bool playerFirst)
+void GameWidget::startSingle(const QString& playerName, bool playerFirst,
+                              AIDifficulty difficulty)
 {
     netMode  = false;
     net_     = nullptr;
     myName_  = playerName;
     opName_  = "AI";
     myStone  = playerFirst ? 1 : 2;
+    aiDifficulty_ = difficulty;
     resetBoard();
     playing  = true;
     gameOver_= false;
@@ -119,6 +129,9 @@ void GameWidget::resetBoard()
     for (int r = 0; r < BOARD; ++r)
         for (int c = 0; c < BOARD; ++c)
             board[r][c] = 0;
+    livesBlack_ = MAX_LIVES;
+    livesWhite_ = MAX_LIVES;
+    emit livesChanged(livesBlack_, livesWhite_);
 }
 
 // ── 그리기 ───────────────────────────────────────────────────────────────────
@@ -270,7 +283,10 @@ bool GameWidget::placeStone(int r, int c)
     if (r < 0 || r >= BOARD || c < 0 || c >= BOARD) return false;
     if (board[r][c] != 0) return false;
 
+    qDebug() << "[placeStone] click at (" << r << "," << c << ") currentStone=" << currentStone
+             << " myTurn=" << myTurn << " netMode=" << netMode;
     if (isForbiddenDoubleThree(r, c, currentStone)) {
+        qDebug() << "[placeStone] -> FORBIDDEN detected";
         forbiddenR = r;
         forbiddenC = c;
         emit ruleViolation("흑은 삼삼(33) 금수 자리에 둘 수 없습니다.");
@@ -356,8 +372,10 @@ int GameWidget::countOpenThreesAt(int r, int c) const
 {
     const int dr[] = {0, 1, 1, 1};
     const int dc[] = {1, 0, 1, -1};
+    const char* dname[] = {"H ", "V ", "D\\", "D/"};
     int total = 0;
 
+    qDebug().noquote() << "[33-check] at (" << r << "," << c << ") board[r][c]=" << board[r][c];
     for (int d = 0; d < 4; ++d) {
         QVector<int> line;
         int center = 4;
@@ -372,9 +390,15 @@ int GameWidget::countOpenThreesAt(int r, int c) const
                 line.append(board[nr][nc]);
         }
 
-        if (isOpenThreeLine(line, center)) ++total;
+        bool ok = isOpenThreeLine(line, center);
+        if (ok) ++total;
+
+        QString s;
+        for (int v : line) s += QString::number(v);
+        qDebug().noquote() << "  dir" << dname[d] << "line=" << s << "openThree=" << ok;
     }
 
+    qDebug().noquote() << "[33-check] total openThrees =" << total;
     return total;
 }
 
@@ -493,9 +517,23 @@ void GameWidget::onTurnTimerTick()
 
     if (secondsLeft_ > 0) return;
 
+    // 30초 만료: 현재 차례 플레이어가 목숨 하나 잃음.
+    int& lives = (currentStone == 1) ? livesBlack_ : livesWhite_;
+    if (lives > 0) --lives;
+    emit livesChanged(livesBlack_, livesWhite_);
+
+    if (lives > 0) {
+        // 아직 목숨 남음 → 타이머만 리셋하고 게임 계속.
+        QString loser = (currentStone == myStone) ? myName_ : opName_;
+        emit turnTimedOut(QString("%1 시간 초과 (목숨 %2개 남음)").arg(loser).arg(lives));
+        resetTurnTimer();
+        return;
+    }
+
+    // 목숨 0 → 게임 종료.
     int winnerStone = (currentStone == 1) ? 2 : 1;
     QString loser = (currentStone == myStone) ? myName_ : opName_;
-    emit turnTimedOut(loser + " 시간 초과");
+    emit turnTimedOut(loser + " 시간 초과 (목숨 소진)");
 
     if (netMode && net_) {
         QJsonObject msg;
@@ -512,8 +550,113 @@ void GameWidget::doAiMove()
 {
     if (!playing || gameOver_ || paused_) return;
 
-    int bestR = -1, bestC = -1, bestScore = -1;
+    // 첫 수(AI가 흑 선공): 중앙 ±2 범위에서 랜덤 착수.
+    // 빈 보드에선 평가 함수가 전부 0점이라, 두면 항상 (0,0) 에서 시작하는 문제 방지.
+    if (moveCount == 0) {
+        int center = BOARD / 2;
+        int rr = center + QRandomGenerator::global()->bounded(-2, 3);
+        int cc = center + QRandomGenerator::global()->bounded(-2, 3);
+        placeStone(rr, cc);
+        return;
+    }
+
+    if      (aiDifficulty_ == AIDifficulty::Hard)   doAiMoveHard();
+    else if (aiDifficulty_ == AIDifficulty::Medium) doAiMoveMedium();
+    else                                             doAiMoveEasy();
+}
+
+// ── 어려움: Gemini API 호출 ──────────────────────────────────────────────────
+void GameWidget::doAiMoveHard()
+{
+    if (aiThinking_) return;  // 중복 요청 방지
+
     int aiStone = (myStone == 1) ? 2 : 1;
+    QString prompt = buildGeminiPrompt(aiStone);
+
+    aiThinking_ = true;
+    emit ruleViolation("🤖 AI 가 수를 고민 중...");
+    geminiClient_->requestText(prompt);
+}
+
+QString GameWidget::buildGeminiPrompt(int aiStone) const
+{
+    QString sideName = (aiStone == 1) ? "BLACK (B)" : "WHITE (W)";
+    QString myCh     = (aiStone == 1) ? "B" : "W";
+    QString oppCh    = (aiStone == 1) ? "W" : "B";
+
+    QString s;
+    s += "You are playing Gomoku (Five in a Row) on a 15x15 board.\n";
+    s += "You play as " + sideName + ". Your stones: " + myCh + ", opponent: " + oppCh + ", empty: .\n";
+    s += "Win condition: exactly 5 stones in a row (horizontal, vertical, or diagonal).\n";
+    if (aiStone == 1) {
+        s += "BLACK is under Renju rules: no double-three, no double-four, no overline (6+ in a row).\n";
+    }
+    s += "Priorities: 1) win now if possible, 2) block opponent's 4-in-row, 3) block opponent's open 3, "
+         "4) make your own open 3/4, 5) play near existing stones.\n\n";
+
+    s += "Board (rows 0-14 top->bottom, cols 0-14 left->right):\n   ";
+    for (int c = 0; c < BOARD; ++c) s += QString("%1 ").arg(c % 10);
+    s += "\n";
+    for (int r = 0; r < BOARD; ++r) {
+        s += QString("%1  ").arg(r, 2);
+        for (int c = 0; c < BOARD; ++c) {
+            int v = board[r][c];
+            s += (v == 0) ? QChar('.') : (v == 1 ? QChar('B') : QChar('W'));
+            s += ' ';
+        }
+        s += '\n';
+    }
+    s += "\nRespond with ONLY your move as two numbers \"row,col\" (both 0-14). No explanation, no other text. Example: 7,7";
+    return s;
+}
+
+void GameWidget::onGeminiTextReady(const QString& text)
+{
+    aiThinking_ = false;
+    if (!playing || gameOver_ || paused_) return;
+    if (aiDifficulty_ != AIDifficulty::Hard) return;
+
+    qDebug() << "[Gemini] reply:" << text;
+
+    QRegularExpression re(R"((\d{1,2})\s*[,\s]\s*(\d{1,2}))");
+    auto m = re.match(text);
+    int aiStone = (myStone == 1) ? 2 : 1;
+    if (!m.hasMatch()) {
+        qDebug() << "[Gemini] parse fail -> fallback Medium";
+        doAiMoveMedium();
+        return;
+    }
+
+    int r = m.captured(1).toInt();
+    int c = m.captured(2).toInt();
+
+    // 유효성 검증: 범위/빈칸/흑 금수 체크. 문제 있으면 Medium 로직으로 대체.
+    bool bad = (r < 0 || r >= BOARD || c < 0 || c >= BOARD)
+            || (board[r][c] != 0)
+            || (aiStone == 1 && isForbiddenDoubleThree(r, c, aiStone));
+    if (bad) {
+        qDebug() << "[Gemini] invalid move (" << r << "," << c << ") -> fallback Medium";
+        doAiMoveMedium();
+        return;
+    }
+
+    placeStone(r, c);
+}
+
+void GameWidget::onGeminiFailed(const QString& reason)
+{
+    aiThinking_ = false;
+    qDebug() << "[Gemini] failed:" << reason << "-> fallback Medium";
+    if (!playing || gameOver_ || paused_) return;
+    if (aiDifficulty_ != AIDifficulty::Hard) return;
+    emit ruleViolation("⚠ Gemini 실패 — 중간 AI 로 대체");
+    doAiMoveMedium();
+}
+
+void GameWidget::doAiMoveEasy()
+{
+    int aiStone = (myStone == 1) ? 2 : 1;
+    int bestR = -1, bestC = -1, bestScore = -1;
 
     for (int r = 0; r < BOARD; ++r) {
         for (int c = 0; c < BOARD; ++c) {
@@ -525,7 +668,6 @@ void GameWidget::doAiMove()
     }
 
     if (bestR == -1) {
-        // 빈 칸 랜덤 선택
         QVector<QPair<int,int>> empties;
         for (int r=0;r<BOARD;++r)
             for(int c=0;c<BOARD;++c)
@@ -537,6 +679,119 @@ void GameWidget::doAiMove()
     }
 
     placeStone(bestR, bestC);
+}
+
+void GameWidget::doAiMoveMedium()
+{
+    int aiStone  = (myStone == 1) ? 2 : 1;
+    int oppStone = myStone;
+
+    // 후보는 이미 놓인 돌 주변 2칸 이내로 제한 (성능 + 엉뚱한 수 방지)
+    auto isCandidate = [&](int r, int c) {
+        if (board[r][c]) return false;
+        for (int dr = -2; dr <= 2; ++dr)
+            for (int dc = -2; dc <= 2; ++dc) {
+                int nr = r + dr, nc = c + dc;
+                if (nr<0||nr>=BOARD||nc<0||nc>=BOARD) continue;
+                if (board[nr][nc]) return true;
+            }
+        return false;
+    };
+
+    int bestR = -1, bestC = -1;
+    long long bestScore = -1;
+
+    for (int r = 0; r < BOARD; ++r) {
+        for (int c = 0; c < BOARD; ++c) {
+            if (!isCandidate(r, c)) continue;
+            if (isForbiddenDoubleThree(r, c, aiStone)) continue;
+
+            int my  = evalCellMedium(r, c, aiStone);
+            int opp = evalCellMedium(r, c, oppStone);
+
+            // 내가 5목 완성 가능한 자리면 바로 감.
+            if (my >= 100000) { placeStone(r, c); return; }
+
+            // 수비 가중치 살짝 높게 (1.1배). 상대가 여기서 5목/열린4 만드는 걸 반드시 막음.
+            long long sc = (long long)my + (long long)(opp * 1.1);
+            if (sc > bestScore) { bestScore = sc; bestR = r; bestC = c; }
+        }
+    }
+
+    if (bestR == -1) {
+        // 아무것도 없으면 중앙 근처
+        int center = BOARD / 2;
+        for (int d = 0; d < 5 && bestR == -1; ++d) {
+            for (int dr = -d; dr <= d && bestR == -1; ++dr)
+                for (int dc = -d; dc <= d && bestR == -1; ++dc) {
+                    int r = center + dr, c = center + dc;
+                    if (r>=0&&r<BOARD&&c>=0&&c<BOARD
+                        && !board[r][c]
+                        && !isForbiddenDoubleThree(r, c, aiStone)) {
+                        bestR = r; bestC = c;
+                    }
+                }
+        }
+    }
+
+    if (bestR >= 0) placeStone(bestR, bestC);
+}
+
+// (r,c) 에 stone 을 뒀을 때, 4방향 패턴 점수의 합을 반환.
+int GameWidget::evalCellMedium(int r, int c, int stone) const
+{
+    const int dr[] = {0, 1, 1, 1};
+    const int dc[] = {1, 0, 1, -1};
+    int total = 0;
+
+    const_cast<GameWidget*>(this)->board[r][c] = stone;   // 임시 배치
+    for (int d = 0; d < 4; ++d) {
+        QVector<int> line; line.reserve(9);
+        for (int off = -4; off <= 4; ++off) {
+            int nr = r + dr[d]*off, nc = c + dc[d]*off;
+            if (nr<0||nr>=BOARD||nc<0||nc>=BOARD) line.append(-1);  // 벽
+            else                                   line.append(board[nr][nc]);
+        }
+        total += evalLineMedium(line, 4, stone);
+    }
+    const_cast<GameWidget*>(this)->board[r][c] = 0;
+    return total;
+}
+
+// 9칸 라인에서 center 위치의 stone 을 중심으로 연속돌 개수와 끝 개방성을 보고 점수화.
+// line 원소: 0=빈, 1=흑, 2=백, -1=벽 (막힌 것으로 취급)
+int GameWidget::evalLineMedium(const QVector<int>& line, int center, int stone) const
+{
+    // center 위치를 포함하는 연속 run 구간 [left, right] 찾기
+    int left = center, right = center;
+    while (left  > 0                 && line[left  - 1] == stone) --left;
+    while (right < line.size() - 1   && line[right + 1] == stone) ++right;
+    int count = right - left + 1;
+
+    // 양쪽 끝이 빈칸이면 "열림", 벽/상대돌이면 "막힘"
+    bool leftOpen  = (left  > 0                 && line[left  - 1] == 0);
+    bool rightOpen = (right < line.size() - 1   && line[right + 1] == 0);
+
+    if (count >= 5) return 100000;
+    if (count == 4) {
+        if (leftOpen && rightOpen) return 50000;  // 열린 4 - 다음 수 승리 확정
+        if (leftOpen || rightOpen) return 1000;   // 막힌 4 - 상대가 한쪽 막으면 끝
+        return 0;
+    }
+    if (count == 3) {
+        if (leftOpen && rightOpen) return 500;    // 열린 3
+        if (leftOpen || rightOpen) return 60;     // 막힌 3
+        return 0;
+    }
+    if (count == 2) {
+        if (leftOpen && rightOpen) return 50;     // 열린 2
+        if (leftOpen || rightOpen) return 8;
+        return 0;
+    }
+    // count == 1 (방금 둔 돌 하나만)
+    if (leftOpen && rightOpen) return 4;
+    if (leftOpen || rightOpen) return 1;
+    return 0;
 }
 
 int GameWidget::aiScore(int r, int c, int stone) const

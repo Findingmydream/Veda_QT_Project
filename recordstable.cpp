@@ -91,12 +91,16 @@ QString formatDuration(int sec)
         .arg(m, 2, 10, QChar('0')).arg(s, 2, 10, QChar('0'));
 }
 
-void setupColumns(QTableWidget* table, bool includePlayerColumn)
+void setupColumns(QTableWidget* table, bool includePlayerColumn, bool fillWidth)
 {
     QStringList headers;
     headers << "ID";
     if (includePlayerColumn) headers << "플레이어";
-    headers << "모드" << "결과" << "내 돌" << "상대" << "상대 칭호" << "수" << "게임시간" << "날짜";
+    headers << "모드" << "결과"
+            << "내 칭호" << "대결" << "상대 칭호"
+            << "상대"
+            << "내 돌" << "대결" << "상대 돌"
+            << "수" << "게임시간" << "날짜";
 
     table->setColumnCount(headers.size());
     table->setHorizontalHeaderLabels(headers);
@@ -116,16 +120,33 @@ void setupColumns(QTableWidget* table, bool includePlayerColumn)
     table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     table->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    // 다른 컬럼은 내용 크기에 맞춤. "상대" 컬럼만 Stretch 로 남는 공간을 채움.
-    // 컬럼 순서: ID / [플레이어] / 모드 / 결과 / 내 돌 / 상대 / 상대 칭호 / 수 / 게임시간 / 날짜
-    int oppCol = includePlayerColumn ? 5 : 4;
     for (int c = 0; c < table->columnCount(); ++c)
         hh->setSectionResizeMode(c, QHeaderView::ResizeToContents);
-    hh->setSectionResizeMode(oppCol, QHeaderView::Stretch);
+
+    if (fillWidth) {
+        // "상대" (이름) 컬럼을 Stretch 로 전환 → 넓은 탭에선 남는 공간을 채움.
+        // 새 컬럼 순서: ID / [플레이어] / 모드 / 결과 / 내칭호 / 대결 / 상대칭호 / 상대 / ...
+        int oppNameCol = includePlayerColumn ? 7 : 6;
+        hh->setSectionResizeMode(oppNameCol, QHeaderView::Stretch);
+    }
+    // fillWidth=false 면 전부 ResizeToContents → 내용 넘치면 자동 가로 스크롤.
 }
 
 void fill(QTableWidget* table, const QVector<GameRecord>& records, bool includePlayerColumn)
 {
+    // ResizeToContents 모드에서 setItem 마다 너비 재계산이 일어나 O(행×열) 이 됨.
+    // 채우는 동안 Interactive 로 바꿔두고 마지막에 한 번만 내용 크기로 리사이즈.
+    auto* hh = table->horizontalHeader();
+    QVector<QHeaderView::ResizeMode> savedModes;
+    savedModes.reserve(table->columnCount());
+    for (int c = 0; c < table->columnCount(); ++c) {
+        savedModes.append(hh->sectionResizeMode(c));
+        hh->setSectionResizeMode(c, QHeaderView::Interactive);
+    }
+    table->setUpdatesEnabled(false);
+    const bool wasSorting = table->isSortingEnabled();
+    table->setSortingEnabled(false);
+
     table->setRowCount(records.size());
     for (int i = 0; i < records.size(); ++i) {
         const auto& r = records[i];
@@ -141,21 +162,43 @@ void fill(QTableWidget* table, const QVector<GameRecord>& records, bool includeP
         bool isAI = (r.opponent.compare("AI", Qt::CaseInsensitive) == 0);
         QString mode  = isAI ? "싱글(AI)" : "멀티";
         QString opp   = isAI ? "AI" : r.opponent;
-        QString stone = (r.myStone == 1) ? "흑"
-                      : (r.myStone == 2) ? "백" : "-";
+
+        auto stoneStr = [](int s) {
+            return (s == 1) ? QStringLiteral("흑")
+                 : (s == 2) ? QStringLiteral("백")
+                 : QStringLiteral("-");
+        };
+        QString myStone  = stoneStr(r.myStone);
+        int oppStoneVal  = (r.myStone == 1) ? 2 : (r.myStone == 2) ? 1 : 0;
+        QString oppStone = stoneStr(oppStoneVal);
+
+        QString myTitle  = r.myTitle.isEmpty() ? QStringLiteral("-") : r.myTitle;
+        QString oppTitle = r.opponentTitle.isEmpty() ? QStringLiteral("-") : r.opponentTitle;
+
+        const QString VS = QStringLiteral("VS");
 
         int col = 0;
         setC(col++, QString::number(r.id));
         if (includePlayerColumn) setC(col++, r.playerName);
         setC(col++, mode);
         setC(col++, r.result, rc);
-        setC(col++, stone);
+        setC(col++, myTitle);
+        setC(col++, VS, QColor(255, 200, 80));
+        setC(col++, oppTitle);
         setC(col++, opp);
-        setC(col++, r.opponentTitle.isEmpty() ? QString("-") : r.opponentTitle);
+        setC(col++, myStone);
+        setC(col++, VS, QColor(255, 200, 80));
+        setC(col++, oppStone);
         setC(col++, QString::number(r.moves));
         setC(col++, formatDuration(r.durationSeconds));
         setC(col++, r.playedAt.toString("yyyy-MM-dd"));
     }
+
+    // 모드 복구: 채우기 다 끝난 뒤 한 번만 재측정됨.
+    for (int c = 0; c < table->columnCount(); ++c)
+        hh->setSectionResizeMode(c, savedModes[c]);
+    table->setSortingEnabled(wasSorting);
+    table->setUpdatesEnabled(true);
 }
 
 }  // namespace RecordsTable

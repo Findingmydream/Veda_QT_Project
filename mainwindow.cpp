@@ -65,24 +65,33 @@ MainWindow::MainWindow(const Player& loggedInPlayer, QWidget* parent)
 
     setupStyle();
     setupGameTab();
-    setupProfileTab();    // 1번 위치
-    setupRecordTab();     // 2번 위치 (플레이어 조회)
-    setupMyRecordsTab();  // 3번 위치 (전적)
+    setupProfileTab();
+    setupRecordTab();
+    setupMyRecordsTab();
     setupMultiTab();
+
+    // 멀티 탭을 게임 탭 바로 오른쪽(인덱스 1) 으로 이동.
+    // 최종 순서: 게임(0) / 멀티(1) / 내 프로필(2) / 플레이어 조회(3) / 전적(4)
+    {
+        int multiIdx = tabs->indexOf(ui->multiTab);
+        if (multiIdx > 1) tabs->tabBar()->moveTab(multiIdx, 1);
+    }
 
     setWindowTitle(QString("⚫⚪  오목 게임 - %1").arg(loggedInPlayer_.nickname));
     ui->accountLabel->setText("로그인: " + loggedInPlayer_.nickname);
 
     connect(tabs, &QTabWidget::currentChanged, [this](int i) {
-        if (i == 1) refreshPlayerList();                                   // 내 프로필
-        if (i == 2) { refreshPlayerList(); refreshRecordTable(); }         // 플레이어 조회
-        if (i == 3) { refreshPlayerList(); refreshMyRecordsTable(); }      // 전적
-        if (i == 4)   refreshPlayerList();                                 // 멀티
+        // 새 순서: 0=게임 / 1=멀티 / 2=내 프로필 / 3=플레이어 조회 / 4=전적
+        if (i == 1)   refreshPlayerList();                                 // 멀티
+        if (i == 2)   refreshPlayerList();                                 // 내 프로필
+        if (i == 3) { refreshPlayerList(); refreshRecordTable(); }         // 플레이어 조회
+        if (i == 4) { refreshPlayerList(); refreshMyRecordsTable(); }      // 전적
         updateHeaderStatus();
     });
 
     refreshPlayerList();
     updateHeaderStatus();
+    tabs->setCurrentIndex(0);   // 로그인 후 기본은 게임 탭
 }
 
 MainWindow::~MainWindow()
@@ -100,6 +109,60 @@ void MainWindow::setupStyle()
 void MainWindow::setupGameTab()
 {
     firstRadio->setChecked(true);
+
+    // AI 난이도 선택 버튼 (↓ 모양 메뉴로 열리는 드롭다운).
+    // 게임 설정 레이아웃의 AI 대전 시작 버튼 왼쪽에 삽입.
+    aiDifficultyBtn = new QPushButton(this);
+    aiDifficultyBtn->setMinimumSize(130, 32);
+    auto* diffMenu = new QMenu(aiDifficultyBtn);
+    auto updateDiffLabel = [this]() {
+        const char* name = "쉬움";
+        if      (currentAIDifficulty == GameWidget::AIDifficulty::Medium) name = "중간";
+        else if (currentAIDifficulty == GameWidget::AIDifficulty::Hard)   name = "어려움(Gemini)";
+        aiDifficultyBtn->setText(QString("🎚  난이도: %1 ▾").arg(name));
+    };
+    QAction* easyAct   = diffMenu->addAction("쉬움");
+    QAction* mediumAct = diffMenu->addAction("중간");
+    QAction* hardAct   = diffMenu->addAction("어려움 (Gemini)");
+    connect(easyAct, &QAction::triggered, this, [this, updateDiffLabel]() {
+        currentAIDifficulty = GameWidget::AIDifficulty::Easy;
+        updateDiffLabel();
+    });
+    connect(mediumAct, &QAction::triggered, this, [this, updateDiffLabel]() {
+        currentAIDifficulty = GameWidget::AIDifficulty::Medium;
+        updateDiffLabel();
+    });
+    connect(hardAct, &QAction::triggered, this, [this, updateDiffLabel]() {
+        currentAIDifficulty = GameWidget::AIDifficulty::Hard;
+        updateDiffLabel();
+    });
+    aiDifficultyBtn->setMenu(diffMenu);
+    updateDiffLabel();
+
+    if (auto* startLayout = qobject_cast<QHBoxLayout*>(ui->startSingleBtn->parentWidget()->layout())) {
+        int startIdx = startLayout->indexOf(ui->startSingleBtn);
+        startLayout->insertWidget(startIdx, aiDifficultyBtn);
+    }
+
+    // turnTimerLabel(30초) 아래에 목숨 표시를 넣기 위해 컨테이너 위젯으로 감쌈.
+    livesLabel = new QLabel(this);
+    livesLabel->setAlignment(Qt::AlignCenter);
+    livesLabel->setStyleSheet("color:#ff6b6b; font-size:11px; padding:0 4px;");
+    livesLabel->setText("❤ ❤ ❤");
+    if (auto* settingLayout = qobject_cast<QHBoxLayout*>(ui->turnTimerLabel->parentWidget()->layout())) {
+        int timerIdx = settingLayout->indexOf(ui->turnTimerLabel);
+        if (timerIdx >= 0) {
+            settingLayout->takeAt(timerIdx);  // HBox 에서 라벨 떼어냄 (삭제는 안 됨)
+
+            auto* timerCol = new QVBoxLayout;
+            timerCol->setSpacing(1);
+            timerCol->setContentsMargins(0, 0, 0, 0);
+            timerCol->addWidget(ui->turnTimerLabel);
+            timerCol->addWidget(livesLabel);
+            settingLayout->insertLayout(timerIdx, timerCol);
+        }
+    }
+
     connect(ui->startSingleBtn, &QPushButton::clicked, this, &MainWindow::onStartSingle);
     connect(ui->pauseBtn, &QPushButton::clicked, this, &MainWindow::onTogglePause);
     connect(ui->rematchBtn, &QPushButton::clicked, this, &MainWindow::onRematch);
@@ -120,6 +183,16 @@ void MainWindow::setupGameTab()
         statusLabel->setText(message);
         updateHeaderStatus(message);
     });
+    connect(game, &GameWidget::livesChanged, [this](int livesBlack, int livesWhite) {
+        if (!livesLabel) return;
+        // 내 돌 색에 맞춰 내 목숨만 표시. 플레이어 기준이라 "내 목숨 = ❤ x N" 느낌.
+        int myStone = game->myStoneColor();
+        int lives = (myStone == 2) ? livesWhite : livesBlack;  // 기본 흑 기준
+        const int max = 3;
+        QString txt;
+        for (int i = 0; i < max; ++i) txt += (i < lives) ? "❤ " : "🖤 ";
+        livesLabel->setText(txt.trimmed());
+    });
     ui->rematchBtn->setVisible(false);
     ui->leaveRoomBtn->setVisible(false);
 }
@@ -135,14 +208,17 @@ void MainWindow::onStartSingle()
     currentOpponentName = "AI";
     localRematchRequested = false;
     remoteRematchRequested = false;
-    game->startSingle(name, first);
+    game->startSingle(name, first, currentAIDifficulty);
     ui->pauseBtn->setEnabled(true);
     ui->pauseBtn->setText("⏸  일시정지");
     ui->rematchBtn->setVisible(false);
     ui->leaveRoomBtn->setVisible(false);
-    updateHeaderStatus(QString("AI 대전 중 - %1 선공").arg(first ? name : "AI"));
-    statusLabel->setText(QString("%1 vs AI  |  %2 선공")
-        .arg(name, first ? name : "AI"));
+    const char* diffName = "쉬움";
+    if      (currentAIDifficulty == GameWidget::AIDifficulty::Medium) diffName = "중간";
+    else if (currentAIDifficulty == GameWidget::AIDifficulty::Hard)   diffName = "어려움";
+    updateHeaderStatus(QString("AI 대전 중 (%1) - %2 선공").arg(diffName, first ? name : "AI"));
+    statusLabel->setText(QString("%1 vs AI (%2)  |  %3 선공")
+        .arg(name, diffName, first ? name : "AI"));
 }
 
 void MainWindow::onGameFinished(QString winner, int moves, int durationSeconds, int myStone)
@@ -259,6 +335,7 @@ void MainWindow::setupProfileTab()
     profileAvatar->setAlignment(Qt::AlignCenter);
     profileAvatar->setStyleSheet("border:2px solid #2a2a4a; background:#0d1117; color:#888; border-radius:8px;");
     avatarCol->addWidget(profileAvatar, 0, Qt::AlignHCenter);
+    headerRow->addLayout(avatarCol, 0);
 
     auto* avatarBtnRow = new QHBoxLayout;
     avatarBtnRow->setSpacing(4);
@@ -269,8 +346,6 @@ void MainWindow::setupProfileTab()
     avatarBtnRow->addWidget(avatarCaptureBtn);
     avatarBtnRow->addStretch(1);
     avatarBtnRow->addWidget(accountDeleteBtn);
-    avatarCol->addLayout(avatarBtnRow);
-    headerRow->addLayout(avatarCol, 0);
 
     // 우: 닉네임 + 칭호
     auto* infoCol = new QVBoxLayout;
@@ -282,8 +357,8 @@ void MainWindow::setupProfileTab()
     profileNickEdit = new QLineEdit;
     profileNickEdit->setStyleSheet("color:white; font-size:18px; font-weight:bold; padding:2px 6px;");
     profileNickEdit->hide();
-    nickEditBtn = new QPushButton("✏️");
-    nickEditBtn->setMaximumWidth(36);
+    nickEditBtn = new QPushButton("수정");
+    nickEditBtn->setStyleSheet("font-size:13px; padding:4px 14px;");
     nickEditBtn->setToolTip("닉네임 변경");
     nickRow->addWidget(profileNickLabel);
     nickRow->addWidget(profileNickEdit, 1);
@@ -311,6 +386,7 @@ void MainWindow::setupProfileTab()
 
     headerRow->addLayout(infoCol, 1);
     root->addLayout(headerRow);
+    root->addLayout(avatarBtnRow);
 
     // === 전적 sub-tabs ===
     auto* statsTabs = new QTabWidget;
@@ -460,7 +536,7 @@ void MainWindow::onNickEditToggle()
         // 뷰 모드로 복귀
         profileNickEdit->hide();
         profileNickLabel->show();
-        nickEditBtn->setText("✏️");
+        nickEditBtn->setText("수정");
         refreshPlayerList();
     } else {
         // 편집 모드 진입
@@ -469,7 +545,7 @@ void MainWindow::onNickEditToggle()
         profileNickEdit->show();
         profileNickEdit->setFocus();
         profileNickEdit->selectAll();
-        nickEditBtn->setText("💾");
+        nickEditBtn->setText("저장");
     }
 }
 
@@ -640,13 +716,11 @@ void MainWindow::setupMyRecordsTab()
     myRecordsResultCombo = new QComboBox;
     myRecordsResultCombo->addItems({"전체","승","패","무"});
     auto* refreshBtn = new QPushButton("🔄  새로고침");
-    myRecordsDeleteBtn = new QPushButton("🗑  선택 삭제");
     myRecordsDeleteAllBtn = new QPushButton("🗑  전체 삭제");
     topRow->addWidget(new QLabel("결과:"));
     topRow->addWidget(myRecordsResultCombo);
     topRow->addStretch(1);
     topRow->addWidget(refreshBtn);
-    topRow->addWidget(myRecordsDeleteBtn);
     topRow->addWidget(myRecordsDeleteAllBtn);
     root->addLayout(topRow);
 
@@ -659,7 +733,6 @@ void MainWindow::setupMyRecordsTab()
     connect(refreshBtn,           &QPushButton::clicked, this, &MainWindow::onMyRecordsRefresh);
     connect(myRecordsResultCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             [this](int) { refreshMyRecordsTable(); });
-    connect(myRecordsDeleteBtn,   &QPushButton::clicked, this, &MainWindow::onDeleteMyRecord);
     connect(myRecordsDeleteAllBtn, &QPushButton::clicked, this, &MainWindow::onDeleteAllMyRecords);
 }
 
@@ -768,37 +841,6 @@ void MainWindow::refreshMyRecordsTable()
     // 모든 유저의 기록을 시간순으로 (readRecords 가 played_at DESC 로 정렬)
     auto records = Database::instance().readRecords(0, resultFilter);
     RecordsTable::fill(myRecordsTable, records, /*includePlayerColumn=*/true);
-}
-
-void MainWindow::onDeleteMyRecord()
-{
-    if (!myRecordsTable) return;
-    int row = myRecordsTable->currentRow();
-    if (row < 0) {
-        QMessageBox::information(this, "알림", "삭제할 기록을 선택하세요.");
-        return;
-    }
-    int id = myRecordsTable->item(row, 0)->text().toInt();
-
-    // 본인 기록만 삭제 허용
-    auto all = Database::instance().readRecords(0);
-    int ownerId = 0;
-    for (const auto& r : all) {
-        if (r.id == id) { ownerId = r.playerId; break; }
-    }
-    if (ownerId != loggedInPlayer_.id) {
-        QMessageBox::warning(this, "알림", "본인의 기록만 삭제할 수 있습니다.");
-        return;
-    }
-
-    if (QMessageBox::question(this, "확인", "정말로 삭제하겠습니까?")
-        != QMessageBox::Yes) return;
-    if (!Database::instance().deleteRecord(id)) {
-        QMessageBox::warning(this, "알림", "기록 삭제에 실패했습니다.");
-        return;
-    }
-    refreshPlayerList();
-    refreshMyRecordsTable();
 }
 
 void MainWindow::onDeleteAllMyRecords()
@@ -1201,16 +1243,16 @@ void MainWindow::updateHeaderStatus(const QString& text)
         ui->headerStatusLabel->setText(game && game->isPlaying() ? "게임 진행 중" : "게임 대기 중");
         break;
     case 1:
-        ui->headerStatusLabel->setText("내 프로필");
+        ui->headerStatusLabel->setText(netManager ? "멀티 연결 관리" : "멀티 대기");
         break;
     case 2:
-        ui->headerStatusLabel->setText("플레이어 조회");
+        ui->headerStatusLabel->setText("내 프로필");
         break;
     case 3:
-        ui->headerStatusLabel->setText("전적 확인");
+        ui->headerStatusLabel->setText("플레이어 조회");
         break;
     case 4:
-        ui->headerStatusLabel->setText(netManager ? "멀티 연결 관리" : "멀티 대기");
+        ui->headerStatusLabel->setText("전적 확인");
         break;
     default:
         ui->headerStatusLabel->setText("오목 게임");

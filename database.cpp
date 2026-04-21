@@ -374,9 +374,13 @@ QVector<GameRecord> Database::readRecords(int playerId, const QString& result)
         "op.id AS opponent_id, "
         "op.wins AS opponent_wins, "
         "op.losses AS opponent_losses, "
-        "op.draws AS opponent_draws "
+        "op.draws AS opponent_draws, "
+        "me.wins AS my_wins, "
+        "me.losses AS my_losses, "
+        "me.draws AS my_draws "
         "FROM records r "
         "LEFT JOIN players op ON op.nickname = r.opponent "
+        "LEFT JOIN players me ON me.id = r.player_id "
         "WHERE 1=1";
     if (playerId > 0)     sql += " AND r.player_id=:pid";
     if (!result.isEmpty()) sql += " AND r.result=:r";
@@ -408,6 +412,14 @@ QVector<GameRecord> Database::readRecords(int playerId, const QString& result)
             r.opponentTitle = playerTitle(total, rate);
         } else {
             r.opponentTitle = "-";
+        }
+        {
+            const int wins = q.value("my_wins").toInt();
+            const int losses = q.value("my_losses").toInt();
+            const int draws = q.value("my_draws").toInt();
+            const int total = wins + losses + draws;
+            const double rate = total > 0 ? (wins * 100.0 / total) : 0.0;
+            r.myTitle = playerTitle(total, rate);
         }
         r.playedAt        = QDateTime::fromString(q.value("played_at").toString(), Qt::ISODate);
         list.append(r);
