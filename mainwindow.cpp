@@ -841,27 +841,8 @@ void MainWindow::onNetPeerConnected()
 
 void MainWindow::onNetPeerDisconnected()
 {
-    if (netManager) {
-        QObject::disconnect(netManager, nullptr, this, nullptr);
-        netManager->closeAll();
-        netManager->deleteLater();
-        netManager = nullptr;
-    }
-    if (game) game->resetToIdle();
-    localRematchRequested = false;
-    remoteRematchRequested = false;
-    remotePlayerName.clear();
-    currentOpponentName = "AI";
-    netStatusLabel->setText("🔴  상대방 연결 끊김");
-    netStatusLabel->setStyleSheet("color:#ff5555; border:1px solid #555; border-radius:6px; padding:8px;");
-    multiStartBtn->setEnabled(false);
-    connectBtn->setEnabled(true); cancelBtn->setEnabled(false);
-    playerListLabel->setText("(없음)");
-    ui->pauseBtn->setEnabled(false);
-    ui->rematchBtn->setVisible(false);
-    ui->leaveRoomBtn->setVisible(false);
-    statusLabel->setText("상대방 연결 끊김");
-    updateHeaderStatus("멀티 연결 끊김");
+    // 호스트/도전자 중 한쪽이 끊어져도 남은 쪽 앱은 멀티 로비로 복귀만 하도록 공통 처리 사용.
+    handleRoomLeft("🔴  상대방 연결 끊김");
 }
 
 void MainWindow::onNetError(QString err)
@@ -992,6 +973,13 @@ void MainWindow::startNetworkGameWithStone(int myStone, const QString& blackName
     ui->leaveRoomBtn->setEnabled(true);
     multiStartBtn->setEnabled(false);
 
+    // 멀티에서 배정된 색을 선/후공 라디오에 반영한다. 선택은 불가(표시 전용).
+    const bool iAmBlack = (myStone == 1);
+    ui->firstRadio->setChecked(iAmBlack);
+    ui->secondRadio->setChecked(!iAmBlack);
+    ui->firstRadio->setEnabled(false);
+    ui->secondRadio->setEnabled(false);
+
     const int opponentStone = (myStone == 1) ? 2 : 1;
     QString black = blackName;
     QString white = whiteName;
@@ -1054,6 +1042,9 @@ void MainWindow::handleRoomLeft(const QString& message)
     ui->pauseBtn->setText("⏸  일시정지");
     ui->rematchBtn->setVisible(false);
     ui->leaveRoomBtn->setVisible(false);
+    // 멀티 전용으로 잠가뒀던 선/후공 라디오를 다시 싱글 AI 대전용으로 풀어준다.
+    ui->firstRadio->setEnabled(true);
+    ui->secondRadio->setEnabled(true);
     multiStartBtn->setEnabled(false);
     connectBtn->setEnabled(true);
     cancelBtn->setEnabled(false);
@@ -1062,6 +1053,10 @@ void MainWindow::handleRoomLeft(const QString& message)
     netStatusLabel->setStyleSheet("color:#888; border:1px solid #333; border-radius:6px; padding:8px;");
     statusLabel->setText(message);
     updateHeaderStatus(message);
+
+    // 방을 나가면 게임 탭에 머무르지 않고 멀티 로비로 돌려보낸다.
+    int multiIdx = tabs->indexOf(ui->multiTab);
+    if (multiIdx >= 0) tabs->setCurrentIndex(multiIdx);
 }
 
 QString MainWindow::currentPlayerName() const
@@ -1080,6 +1075,8 @@ void MainWindow::applyLoggedInPlayer(const Player& player)
     ui->pauseBtn->setText("⏸  일시정지");
     ui->rematchBtn->setVisible(false);
     ui->leaveRoomBtn->setVisible(false);
+    ui->firstRadio->setEnabled(true);
+    ui->secondRadio->setEnabled(true);
 
     setWindowTitle(QString("⚫⚪  오목 게임 - %1").arg(loggedInPlayer_.nickname));
     ui->accountLabel->setText("로그인: " + loggedInPlayer_.nickname);

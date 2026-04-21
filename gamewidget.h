@@ -3,6 +3,7 @@
 #include <QVector>
 #include <QJsonObject>
 #include <QDateTime>
+#include <QPoint>
 
 class NetworkManager;
 class QTimer;
@@ -49,6 +50,7 @@ private:
     bool   isForbiddenDoubleThree(int r, int c, int stone);
     int    countOpenThreesAt(int r, int c) const;
     bool   isOpenThreeLine(const QVector<int>& line, int center) const;
+    void   refreshForbiddenPreview();
     void   resetTurnTimer();
     void   stopTurnTimer();
     void   onTurnTimerTick();
@@ -81,6 +83,9 @@ private:
     // ── 마지막 착수 위치 (강조 표시용) ───────────────────────────────────────
     int lastR = -1, lastC = -1;
     int forbiddenR = -1, forbiddenC = -1;
+
+    // 멀티 플레이 중 흑 차례에 모든 33 금수 자리를 미리 보여주기 위한 목록.
+    QVector<QPoint> forbiddenPreview_;
 
     QDateTime gameStartTime_;
 };

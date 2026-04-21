@@ -40,6 +40,7 @@ void GameWidget::startSingle(const QString& playerName, bool playerFirst)
     moveCount = 0;
     lastR = lastC = -1;
     forbiddenR = forbiddenC = -1;
+    forbiddenPreview_.clear();
     gameStartTime_ = QDateTime::currentDateTime();
     update();
     resetTurnTimer();
@@ -64,7 +65,9 @@ void GameWidget::startNetwork(int myStoneColor, NetworkManager* net,
     moveCount = 0;
     lastR = lastC = -1;
     forbiddenR = forbiddenC = -1;
+    forbiddenPreview_.clear();
     gameStartTime_ = QDateTime::currentDateTime();
+    refreshForbiddenPreview();
     update();
     resetTurnTimer();
 }
@@ -105,6 +108,7 @@ void GameWidget::resetToIdle()
     moveCount = 0;
     lastR = lastC = -1;
     forbiddenR = forbiddenC = -1;
+    forbiddenPreview_.clear();
     stopTurnTimer();
     update();
 }
@@ -177,6 +181,22 @@ void GameWidget::paintEvent(QPaintEvent*)
                 p.setBrush(Qt::NoBrush);
                 p.drawEllipse(QPoint(cx, cy), radius/2, radius/2);
             }
+        }
+    }
+
+    // 멀티에서 흑 차례 동안 모든 33 금수 자리를 옅게 미리 표시.
+    if (!forbiddenPreview_.isEmpty() && playing && !gameOver_) {
+        int mark = CELL / 4;
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setPen(QPen(QColor(230, 40, 40, 170), 2));
+        p.setBrush(QColor(230, 40, 40, 30));
+        for (const QPoint& pt : forbiddenPreview_) {
+            if (pt.x() == forbiddenC && pt.y() == forbiddenR) continue; // 클릭 시 강조된 자리는 아래에서 따로 그림
+            int cx = MARGIN + pt.x() * CELL;
+            int cy = MARGIN + pt.y() * CELL;
+            p.drawEllipse(QPoint(cx, cy), CELL / 2 - 5, CELL / 2 - 5);
+            p.drawLine(cx - mark, cy - mark, cx + mark, cy + mark);
+            p.drawLine(cx + mark, cy - mark, cx - mark, cy + mark);
         }
     }
 
@@ -284,6 +304,7 @@ bool GameWidget::placeStone(int r, int c)
     // 차례 전환
     currentStone = (currentStone == 1) ? 2 : 1;
     myTurn = !myTurn;
+    refreshForbiddenPreview();
     resetTurnTimer();
     update();
 
@@ -355,6 +376,21 @@ int GameWidget::countOpenThreesAt(int r, int c) const
     }
 
     return total;
+}
+
+void GameWidget::refreshForbiddenPreview()
+{
+    forbiddenPreview_.clear();
+    // 유저 요구사항: 멀티 플레이 중 흑 차례일 때만 33 자리 프리뷰 표시.
+    if (!netMode || !playing || gameOver_ || currentStone != 1) return;
+
+    for (int r = 0; r < BOARD; ++r) {
+        for (int c = 0; c < BOARD; ++c) {
+            if (board[r][c] != 0) continue;
+            if (isForbiddenDoubleThree(r, c, 1))
+                forbiddenPreview_.append(QPoint(c, r));
+        }
+    }
 }
 
 bool GameWidget::isOpenThreeLine(const QVector<int>& line, int center) const
