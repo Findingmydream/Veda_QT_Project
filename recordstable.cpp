@@ -7,8 +7,76 @@
 #include <QChar>
 #include <QColor>
 #include <QAbstractItemView>
+#include <QEvent>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QStyledItemDelegate>
 
 namespace RecordsTable {
+namespace {
+
+class HoverRowDelegate : public QStyledItemDelegate
+{
+public:
+    explicit HoverRowDelegate(QObject* parent = nullptr)
+        : QStyledItemDelegate(parent)
+    {
+    }
+
+    void setHoverRow(int row)
+    {
+        hoverRow_ = row;
+    }
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override
+    {
+        QStyleOptionViewItem opt(option);
+        if (index.row() == hoverRow_ && !(opt.state & QStyle::State_Selected)) {
+            painter->fillRect(opt.rect, QColor("#1a4a80"));
+            opt.features &= ~QStyleOptionViewItem::Alternate;
+            opt.backgroundBrush = Qt::NoBrush;
+        }
+
+        QStyledItemDelegate::paint(painter, opt, index);
+    }
+
+private:
+    int hoverRow_ = -1;
+};
+
+class HoverRowEventFilter : public QObject
+{
+public:
+    HoverRowEventFilter(QTableWidget* table, HoverRowDelegate* delegate)
+        : QObject(table)
+        , table_(table)
+        , delegate_(delegate)
+    {
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == table_->viewport()) {
+            if (event->type() == QEvent::MouseMove) {
+                auto* mouse = static_cast<QMouseEvent*>(event);
+                delegate_->setHoverRow(table_->indexAt(mouse->pos()).row());
+                table_->viewport()->update();
+            } else if (event->type() == QEvent::Leave) {
+                delegate_->setHoverRow(-1);
+                table_->viewport()->update();
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    QTableWidget* table_ = nullptr;
+    HoverRowDelegate* delegate_ = nullptr;
+};
+
+}  // namespace
 
 QString formatDuration(int sec)
 {
@@ -37,6 +105,11 @@ void setupColumns(QTableWidget* table, bool includePlayerColumn)
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setAlternatingRowColors(true);
     table->verticalHeader()->setVisible(false);
+    table->setMouseTracking(true);
+    table->viewport()->setMouseTracking(true);
+    auto* hoverDelegate = new HoverRowDelegate(table);
+    table->setItemDelegate(hoverDelegate);
+    table->viewport()->installEventFilter(new HoverRowEventFilter(table, hoverDelegate));
 
     auto* hh = table->horizontalHeader();
     hh->setStretchLastSection(false);

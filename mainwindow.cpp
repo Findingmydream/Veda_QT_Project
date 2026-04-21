@@ -593,11 +593,13 @@ void MainWindow::setupMyRecordsTab()
     myRecordsResultCombo->addItems({"전체","승","패","무"});
     auto* refreshBtn = new QPushButton("🔄  새로고침");
     myRecordsDeleteBtn = new QPushButton("🗑  선택 삭제");
+    myRecordsDeleteAllBtn = new QPushButton("🗑  전체 삭제");
     topRow->addWidget(new QLabel("결과:"));
     topRow->addWidget(myRecordsResultCombo);
     topRow->addStretch(1);
     topRow->addWidget(refreshBtn);
     topRow->addWidget(myRecordsDeleteBtn);
+    topRow->addWidget(myRecordsDeleteAllBtn);
     root->addLayout(topRow);
 
     myRecordsTable = new QTableWidget;
@@ -610,6 +612,7 @@ void MainWindow::setupMyRecordsTab()
     connect(myRecordsResultCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             [this](int) { refreshMyRecordsTable(); });
     connect(myRecordsDeleteBtn,   &QPushButton::clicked, this, &MainWindow::onDeleteMyRecord);
+    connect(myRecordsDeleteAllBtn, &QPushButton::clicked, this, &MainWindow::onDeleteAllMyRecords);
 }
 
 void MainWindow::onRecordSearch()
@@ -740,12 +743,26 @@ void MainWindow::onDeleteMyRecord()
         return;
     }
 
-    if (QMessageBox::question(this, "확인", "이 기록을 삭제할까요?")
+    if (QMessageBox::question(this, "확인", "정말로 삭제하겠습니까?")
         != QMessageBox::Yes) return;
     if (!Database::instance().deleteRecord(id)) {
         QMessageBox::warning(this, "알림", "기록 삭제에 실패했습니다.");
         return;
     }
+    refreshPlayerList();
+    refreshMyRecordsTable();
+}
+
+void MainWindow::onDeleteAllMyRecords()
+{
+    if (QMessageBox::question(this, "확인", "정말로 삭제하겠습니까?")
+        != QMessageBox::Yes) return;
+
+    if (!Database::instance().deleteAllRecords(0)) {
+        QMessageBox::warning(this, "알림", "전체 기록 삭제에 실패했습니다.");
+        return;
+    }
+
     refreshPlayerList();
     refreshMyRecordsTable();
 }

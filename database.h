@@ -70,7 +70,7 @@ public:
     QVector<GameRecord>   readRecords(int playerId = 0,
                                       const QString& result = QString());
     bool                  deleteRecord(int id);
-    void                  deleteAllRecords(int playerId);
+    bool                  deleteAllRecords(int playerId);
 
     // ── Friend CRUD ──────────────────────────────────────────────────────────
     bool            createFriend(int playerId, const QString& friendName);

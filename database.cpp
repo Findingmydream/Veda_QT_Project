@@ -380,17 +380,25 @@ bool Database::deleteRecord(int id)
     return q.exec();
 }
 
-void Database::deleteAllRecords(int playerId)
+bool Database::deleteAllRecords(int playerId)
 {
     QSqlQuery q;
-    q.prepare("DELETE FROM records WHERE player_id=:pid");
-    q.bindValue(":pid", playerId);
-    q.exec();
+    if (playerId > 0) {
+        q.prepare("DELETE FROM records WHERE player_id=:pid");
+        q.bindValue(":pid", playerId);
+    } else {
+        q.prepare("DELETE FROM records");
+    }
+    if (!q.exec()) return false;
 
     QSqlQuery reset;
-    reset.prepare("UPDATE players SET wins=0, losses=0, draws=0 WHERE id=:pid");
-    reset.bindValue(":pid", playerId);
-    reset.exec();
+    if (playerId > 0) {
+        reset.prepare("UPDATE players SET wins=0, losses=0, draws=0 WHERE id=:pid");
+        reset.bindValue(":pid", playerId);
+    } else {
+        reset.prepare("UPDATE players SET wins=0, losses=0, draws=0");
+    }
+    return reset.exec();
 }
 
 // ── Friend CRUD ───────────────────────────────────────────────────────────────

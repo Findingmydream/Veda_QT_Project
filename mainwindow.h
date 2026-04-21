@@ -45,6 +45,7 @@ private slots:
     // ── 전적 탭 (내 게임 기록) ────────────────────────────────────────────────
     void onMyRecordsRefresh();
     void onDeleteMyRecord();
+    void onDeleteAllMyRecords();
 
     // ── 멀티 탭 ───────────────────────────────────────────────────────────────
     void onMultiConnect();
@@ -126,6 +127,7 @@ private:
     QComboBox*    myRecordsResultCombo = nullptr;
     QTableWidget* myRecordsTable       = nullptr;
     QPushButton*  myRecordsDeleteBtn   = nullptr;
+    QPushButton*  myRecordsDeleteAllBtn = nullptr;
 
     // ── 멀티 탭 ───────────────────────────────────────────────────────────────
     QRadioButton* hostRadio;
