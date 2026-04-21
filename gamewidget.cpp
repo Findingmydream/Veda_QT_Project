@@ -649,7 +649,7 @@ void GameWidget::onGeminiFailed(const QString& reason)
     qDebug() << "[Gemini] failed:" << reason << "-> fallback Medium";
     if (!playing || gameOver_ || paused_) return;
     if (aiDifficulty_ != AIDifficulty::Hard) return;
-    emit ruleViolation("⚠ Gemini 실패 — 중간 AI 로 대체");
+    emit ruleViolation("⚠ Gemini Token 부족 / 보통 AI 로 대체");
     doAiMoveMedium();
 }
 

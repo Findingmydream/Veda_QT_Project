@@ -30,6 +30,20 @@ QString stoneName(int stone)
 {
     return stone == 1 ? QStringLiteral("흑") : QStringLiteral("백");
 }
+
+QString aiDifficultyName(GameWidget::AIDifficulty difficulty)
+{
+    if (difficulty == GameWidget::AIDifficulty::Medium) return QStringLiteral("보통");
+    if (difficulty == GameWidget::AIDifficulty::Hard)   return QStringLiteral("어려움(Gemini)");
+    return QStringLiteral("쉬움");
+}
+
+bool isAiOpponentName(const QString& opponent)
+{
+    QString name = opponent.trimmed();
+    return name.compare(QStringLiteral("AI"), Qt::CaseInsensitive) == 0
+        || name.startsWith(QStringLiteral("AI("), Qt::CaseInsensitive);
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,14 +130,11 @@ void MainWindow::setupGameTab()
     aiDifficultyBtn->setMinimumSize(130, 32);
     auto* diffMenu = new QMenu(aiDifficultyBtn);
     auto updateDiffLabel = [this]() {
-        const char* name = "쉬움";
-        if      (currentAIDifficulty == GameWidget::AIDifficulty::Medium) name = "중간";
-        else if (currentAIDifficulty == GameWidget::AIDifficulty::Hard)   name = "어려움(Gemini)";
-        aiDifficultyBtn->setText(QString("🎚  난이도: %1 ▾").arg(name));
+        aiDifficultyBtn->setText(QString("🎚  난이도: %1 ▾").arg(aiDifficultyName(currentAIDifficulty)));
     };
     QAction* easyAct   = diffMenu->addAction("쉬움");
-    QAction* mediumAct = diffMenu->addAction("중간");
-    QAction* hardAct   = diffMenu->addAction("어려움 (Gemini)");
+    QAction* mediumAct = diffMenu->addAction("보통");
+    QAction* hardAct   = diffMenu->addAction("어려움(Gemini)");
     connect(easyAct, &QAction::triggered, this, [this, updateDiffLabel]() {
         currentAIDifficulty = GameWidget::AIDifficulty::Easy;
         updateDiffLabel();
@@ -205,7 +216,7 @@ void MainWindow::onStartSingle()
         return;
     }
     bool first = firstRadio->isChecked();
-    currentOpponentName = "AI";
+    currentOpponentName = QString("AI(%1)").arg(aiDifficultyName(currentAIDifficulty));
     localRematchRequested = false;
     remoteRematchRequested = false;
     game->startSingle(name, first, currentAIDifficulty);
@@ -213,9 +224,7 @@ void MainWindow::onStartSingle()
     ui->pauseBtn->setText("⏸  일시정지");
     ui->rematchBtn->setVisible(false);
     ui->leaveRoomBtn->setVisible(false);
-    const char* diffName = "쉬움";
-    if      (currentAIDifficulty == GameWidget::AIDifficulty::Medium) diffName = "중간";
-    else if (currentAIDifficulty == GameWidget::AIDifficulty::Hard)   diffName = "어려움";
+    QString diffName = aiDifficultyName(currentAIDifficulty);
     updateHeaderStatus(QString("AI 대전 중 (%1) - %2 선공").arg(diffName, first ? name : "AI"));
     statusLabel->setText(QString("%1 vs AI (%2)  |  %3 선공")
         .arg(name, diffName, first ? name : "AI"));
@@ -236,7 +245,7 @@ void MainWindow::onGameFinished(QString winner, int moves, int durationSeconds, 
     Database::instance().createRecord(p.id, opponent, result, moves, durationSeconds, myStone);
     ui->pauseBtn->setEnabled(false);
     ui->pauseBtn->setText("⏸  일시정지");
-    const bool multiGame = currentOpponentName.compare("AI", Qt::CaseInsensitive) != 0
+    const bool multiGame = !isAiOpponentName(currentOpponentName)
         && netManager && netManager->isConnected();
     ui->rematchBtn->setVisible(multiGame);
     ui->rematchBtn->setEnabled(multiGame);
@@ -282,7 +291,7 @@ void MainWindow::onTogglePause()
     bool pause = !game->isPaused();
     game->setPaused(pause);
     ui->pauseBtn->setText(pause ? "▶  계속하기" : "⏸  일시정지");
-    bool multiGame = currentOpponentName.compare("AI", Qt::CaseInsensitive) != 0;
+    bool multiGame = !isAiOpponentName(currentOpponentName);
     QString gameName = multiGame ? "멀티 대전" : "AI 대전";
     updateHeaderStatus(pause ? gameName + " 일시정지" : gameName + " 중");
     statusLabel->setText(pause ? "게임이 일시정지되었습니다." : "게임을 다시 시작했습니다.");
@@ -725,7 +734,7 @@ void MainWindow::setupMyRecordsTab()
     root->addLayout(topRow);
 
     myRecordsTable = new QTableWidget;
-    RecordsTable::setupColumns(myRecordsTable, /*includePlayerColumn=*/true);
+    RecordsTable::setupColumns(myRecordsTable, /*includePlayerColumn=*/false);
     root->addWidget(myRecordsTable, 1);
 
     tabs->insertTab(3, w, "📊  전적");
@@ -838,9 +847,9 @@ void MainWindow::refreshMyRecordsTable()
     QString resultFilter = myRecordsResultCombo ? myRecordsResultCombo->currentText() : QString();
     if (resultFilter == "전체") resultFilter.clear();
 
-    // 모든 유저의 기록을 시간순으로 (readRecords 가 played_at DESC 로 정렬)
-    auto records = Database::instance().readRecords(0, resultFilter);
-    RecordsTable::fill(myRecordsTable, records, /*includePlayerColumn=*/true);
+    // 로그인한 본인 기록만 시간순으로 표시한다.
+    auto records = Database::instance().readRecords(loggedInPlayer_.id, resultFilter);
+    RecordsTable::fill(myRecordsTable, records, /*includePlayerColumn=*/false);
 }
 
 void MainWindow::onDeleteAllMyRecords()
@@ -848,8 +857,8 @@ void MainWindow::onDeleteAllMyRecords()
     if (QMessageBox::question(this, "확인", "정말로 삭제하겠습니까?")
         != QMessageBox::Yes) return;
 
-    if (!Database::instance().deleteAllRecords(0)) {
-        QMessageBox::warning(this, "알림", "전체 기록 삭제에 실패했습니다.");
+    if (!Database::instance().deleteAllRecords(loggedInPlayer_.id)) {
+        QMessageBox::warning(this, "알림", "내 기록 삭제에 실패했습니다.");
         return;
     }
 

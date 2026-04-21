@@ -15,6 +15,13 @@
 namespace RecordsTable {
 namespace {
 
+bool isAiOpponent(const QString& opponent)
+{
+    QString name = opponent.trimmed();
+    return name.compare(QStringLiteral("AI"), Qt::CaseInsensitive) == 0
+        || name.startsWith(QStringLiteral("AI("), Qt::CaseInsensitive);
+}
+
 class HoverRowDelegate : public QStyledItemDelegate
 {
 public:
@@ -159,9 +166,11 @@ void fill(QTableWidget* table, const QVector<GameRecord>& records, bool includeP
         QColor rc = (r.result=="승") ? QColor(100,220,100)
                   : (r.result=="패") ? QColor(220,100,100)
                   : QColor(200,200,100);
-        bool isAI = (r.opponent.compare("AI", Qt::CaseInsensitive) == 0);
+        bool isAI = isAiOpponent(r.opponent);
         QString mode  = isAI ? "싱글(AI)" : "멀티";
-        QString opp   = isAI ? "AI" : r.opponent;
+        QString opp   = isAI && r.opponent.compare(QStringLiteral("AI"), Qt::CaseInsensitive) == 0
+            ? QStringLiteral("AI(미상)")
+            : r.opponent;
 
         auto stoneStr = [](int s) {
             return (s == 1) ? QStringLiteral("흑")

@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QUrl>
 #include <QDebug>
+#include <QSslSocket>
 
 // 주의: 이 키는 공개 대화에 노출됐었으므로 실제 서비스 전에는 반드시 재발급.
 // 장기적으로는 QSettings 에 저장하거나 환경변수에서 읽는 게 안전함.
@@ -24,6 +25,11 @@ GeminiClient::GeminiClient(QObject* parent)
 
 void GeminiClient::requestText(const QString& prompt)
 {
+    if (!QSslSocket::supportsSsl()) {
+        emit failed("Qt SSL 미지원: OpenSSL DLL/libssl 설치 또는 Qt SSL 플러그인 확인 필요");
+        return;
+    }
+
     QJsonObject part;
     part["text"] = prompt;
     QJsonArray parts; parts.append(part);
@@ -56,8 +62,14 @@ void GeminiClient::onReplyFinished()
 
     if (reply->error() != QNetworkReply::NoError) {
         QByteArray body = reply->readAll();
+        int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QString detail = QString::fromUtf8(body).simplified();
+        if (detail.size() > 240) detail = detail.left(240) + "...";
         qDebug().noquote() << "[Gemini] error body:" << body;
-        emit failed(QString("network: %1").arg(reply->errorString()));
+        emit failed(QString("HTTP %1 / %2 / %3")
+                    .arg(statusCode ? QString::number(statusCode) : QString("no-status"),
+                         reply->errorString(),
+                         detail.isEmpty() ? QString("응답 본문 없음") : detail));
         return;
     }
 
