@@ -21,12 +21,14 @@ struct Player {
 
 // ── 전적 기록 ─────────────────────────────────────────────────────────────────
 struct GameRecord {
-    int     id       = 0;
-    int     playerId = 0;
+    int     id              = 0;
+    int     playerId        = 0;
     QString playerName;
-    QString opponent;   // 상대 이름 or "AI"
-    QString result;     // "승" "패" "무"
-    int     moves    = 0;
+    QString opponent;          // 상대 이름 or "AI"
+    QString result;            // "승" "패" "무"
+    int     moves           = 0;
+    int     durationSeconds = 0;
+    int     myStone         = 0;   // 1=흑 2=백 0=미상
     QDateTime playedAt;
 };
 
@@ -63,7 +65,8 @@ public:
 
     // ── GameRecord CRUD ──────────────────────────────────────────────────────
     bool                  createRecord(int playerId, const QString& opponent,
-                                       const QString& result, int moves);
+                                       const QString& result, int moves,
+                                       int durationSeconds = 0, int myStone = 0);
     QVector<GameRecord>   readRecords(int playerId = 0,
                                       const QString& result = QString());
     bool                  deleteRecord(int id);
@@ -79,6 +82,7 @@ private:
     Database() = default;
     bool ensurePlayerPasswordColumns();
     bool ensurePlayerAvatarColumn();
+    bool ensureRecordColumns();
     QString makePasswordSalt() const;
     QString passwordHash(const QString& password, const QString& salt) const;
     bool initialized = false;

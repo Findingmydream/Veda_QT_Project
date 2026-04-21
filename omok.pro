@@ -17,7 +17,8 @@ SOURCES += \
     profiledialog.cpp \
     playersearchdialog.cpp \
     cameracapturedialog.cpp \
-    playerdetaildialog.cpp
+    playerdetaildialog.cpp \
+    recordstable.cpp
 
 HEADERS += \
     logindialog.h \
@@ -29,6 +30,7 @@ HEADERS += \
     playersearchdialog.h \
     cameracapturedialog.h \
     playerdetaildialog.h \
+    recordstable.h \
     titles.h
 
 FORMS += \

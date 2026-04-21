@@ -40,6 +40,7 @@ void GameWidget::startSingle(const QString& playerName, bool playerFirst)
     moveCount = 0;
     lastR = lastC = -1;
     forbiddenR = forbiddenC = -1;
+    gameStartTime_ = QDateTime::currentDateTime();
     update();
     resetTurnTimer();
 
@@ -63,6 +64,7 @@ void GameWidget::startNetwork(int myStoneColor, NetworkManager* net,
     moveCount = 0;
     lastR = lastC = -1;
     forbiddenR = forbiddenC = -1;
+    gameStartTime_ = QDateTime::currentDateTime();
     update();
     resetTurnTimer();
 }
@@ -402,7 +404,9 @@ void GameWidget::endGame(int winner)
     else if (winner == myStone) result = "승";
     else                        result = "패";
 
-    emit gameFinished(winner_, moveCount);
+    int duration = gameStartTime_.isValid()
+        ? gameStartTime_.secsTo(QDateTime::currentDateTime()) : 0;
+    emit gameFinished(winner_, moveCount, duration, myStone);
 }
 
 // ── 네트워크 메시지 처리 ──────────────────────────────────────────────────────

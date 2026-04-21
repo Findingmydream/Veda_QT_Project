@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QVector>
 #include <QJsonObject>
+#include <QDateTime>
 
 class NetworkManager;
 class QTimer;
@@ -25,7 +26,7 @@ public:
     void setPaused(bool paused);
 
 signals:
-    void gameFinished(QString winner, int moves); // 게임 끝날 때
+    void gameFinished(QString winner, int moves, int durationSeconds, int myStone); // 게임 끝날 때
     void ruleViolation(QString message);
     void turnTimeChanged(int secondsLeft, bool urgent);
     void turnTimedOut(QString message);
@@ -80,4 +81,6 @@ private:
     // ── 마지막 착수 위치 (강조 표시용) ───────────────────────────────────────
     int lastR = -1, lastC = -1;
     int forbiddenR = -1, forbiddenC = -1;
+
+    QDateTime gameStartTime_;
 };

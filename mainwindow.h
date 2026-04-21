@@ -26,7 +26,7 @@ public:
 private slots:
     // ── 게임 탭 ───────────────────────────────────────────────────────────────
     void onStartSingle();
-    void onGameFinished(QString winner, int moves);
+    void onGameFinished(QString winner, int moves, int durationSeconds, int myStone);
     void onLogout();
     void onTogglePause();
     void onRematch();

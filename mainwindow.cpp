@@ -22,6 +22,7 @@
 #include "playersearchdialog.h"
 #include "cameracapturedialog.h"
 #include "playerdetaildialog.h"
+#include "recordstable.h"
 #include "titles.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,8 +59,8 @@ MainWindow::MainWindow(const Player& loggedInPlayer, QWidget* parent)
     setupStyle();
     setupGameTab();
     setupProfileTab();    // 1번 위치
-    setupMyRecordsTab();  // 2번 위치 (전적)
-    setupRecordTab();     // 3번 위치 (플레이어 조회)
+    setupRecordTab();     // 2번 위치 (플레이어 조회)
+    setupMyRecordsTab();  // 3번 위치 (전적)
     setupMultiTab();
 
     setWindowTitle(QString("⚫⚪  오목 게임 - %1").arg(loggedInPlayer_.nickname));
@@ -67,8 +68,8 @@ MainWindow::MainWindow(const Player& loggedInPlayer, QWidget* parent)
 
     connect(tabs, &QTabWidget::currentChanged, [this](int i) {
         if (i == 1) refreshPlayerList();                                   // 내 프로필
-        if (i == 2) { refreshPlayerList(); refreshMyRecordsTable(); }      // 전적
-        if (i == 3) { refreshPlayerList(); refreshRecordTable(); }         // 플레이어 조회
+        if (i == 2) { refreshPlayerList(); refreshRecordTable(); }         // 플레이어 조회
+        if (i == 3) { refreshPlayerList(); refreshMyRecordsTable(); }      // 전적
         if (i == 4)   refreshPlayerList();                                 // 멀티
         updateHeaderStatus();
     });
@@ -137,7 +138,7 @@ void MainWindow::onStartSingle()
         .arg(name, first ? name : "AI"));
 }
 
-void MainWindow::onGameFinished(QString winner, int moves)
+void MainWindow::onGameFinished(QString winner, int moves, int durationSeconds, int myStone)
 {
     QString name = currentPlayerName();
     Player p = Database::instance().readPlayerByName(name);
@@ -149,7 +150,7 @@ void MainWindow::onGameFinished(QString winner, int moves)
     else                     result = "패";
 
     QString opponent = currentOpponentName.isEmpty() ? "AI" : currentOpponentName;
-    Database::instance().createRecord(p.id, opponent, result, moves);
+    Database::instance().createRecord(p.id, opponent, result, moves, durationSeconds, myStone);
     ui->pauseBtn->setEnabled(false);
     ui->pauseBtn->setText("⏸  일시정지");
     const bool multiGame = currentOpponentName.compare("AI", Qt::CaseInsensitive) != 0
@@ -307,13 +308,7 @@ void MainWindow::setupProfileTab()
     auto* myTab = new QWidget;
     auto* myLay = new QVBoxLayout(myTab);
     myRecentTable = new QTableWidget;
-    myRecentTable->setColumnCount(4);
-    myRecentTable->setHorizontalHeaderLabels({"상대","결과","수","날짜"});
-    myRecentTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    myRecentTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    myRecentTable->setAlternatingRowColors(true);
-    myRecentTable->verticalHeader()->setVisible(false);
-    myRecentTable->horizontalHeader()->setStretchLastSection(true);
+    RecordsTable::setupColumns(myRecentTable, /*includePlayerColumn=*/false);
     myLay->addWidget(myRecentTable, 1);
     statsTabs->addTab(myTab, "내 전적");
 
@@ -341,13 +336,7 @@ void MainWindow::setupProfileTab()
     oppLay->addWidget(oppStatsBox);
 
     opponentRecordTable = new QTableWidget;
-    opponentRecordTable->setColumnCount(3);
-    opponentRecordTable->setHorizontalHeaderLabels({"결과","수","날짜"});
-    opponentRecordTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    opponentRecordTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    opponentRecordTable->setAlternatingRowColors(true);
-    opponentRecordTable->verticalHeader()->setVisible(false);
-    opponentRecordTable->horizontalHeader()->setStretchLastSection(true);
+    RecordsTable::setupColumns(opponentRecordTable, /*includePlayerColumn=*/false);
     oppLay->addWidget(opponentRecordTable, 1);
 
     statsTabs->addTab(oppTab, "상대 전적");
@@ -504,25 +493,7 @@ void MainWindow::refreshProfile()
     // 내 최근 기록 테이블
     if (myRecentTable) {
         auto records = Database::instance().readRecords(p.id);
-        myRecentTable->setRowCount(records.size());
-        for (int i = 0; i < records.size(); ++i) {
-            const auto& r = records[i];
-            auto setC = [&](int col, const QString& t, QColor color = Qt::white) {
-                auto* it = new QTableWidgetItem(t);
-                it->setTextAlignment(Qt::AlignCenter);
-                it->setForeground(color);
-                myRecentTable->setItem(i, col, it);
-            };
-            QColor rc = (r.result=="승") ? QColor(100,220,100)
-                      : (r.result=="패") ? QColor(220,100,100)
-                      : QColor(200,200,100);
-            QString opp = (r.opponent.compare("AI", Qt::CaseInsensitive) == 0)
-                        ? "AI" : r.opponent;
-            setC(0, opp);
-            setC(1, r.result, rc);
-            setC(2, QString::number(r.moves));
-            setC(3, r.playedAt.toString("MM-dd hh:mm"));
-        }
+        RecordsTable::fill(myRecentTable, records, /*includePlayerColumn=*/false);
     }
 
     // 상대 전적도 함께 갱신 (선택된 상대가 있으면)
@@ -558,22 +529,7 @@ void MainWindow::refreshOpponentStats(const QString& opponent)
     opponentWLDLabel->setText(QString("%1승 %2패 %3무").arg(wins).arg(losses).arg(draws));
     opponentWinRateLabel->setText(QString::number(rate, 'f', 1) + "%");
 
-    opponentRecordTable->setRowCount(matched.size());
-    for (int i = 0; i < matched.size(); ++i) {
-        const auto& r = matched[i];
-        auto setC = [&](int col, const QString& t, QColor color = Qt::white) {
-            auto* it = new QTableWidgetItem(t);
-            it->setTextAlignment(Qt::AlignCenter);
-            it->setForeground(color);
-            opponentRecordTable->setItem(i, col, it);
-        };
-        QColor rc = (r.result=="승") ? QColor(100,220,100)
-                  : (r.result=="패") ? QColor(220,100,100)
-                  : QColor(200,200,100);
-        setC(0, r.result, rc);
-        setC(1, QString::number(r.moves));
-        setC(2, r.playedAt.toString("MM-dd hh:mm"));
-    }
+    RecordsTable::fill(opponentRecordTable, matched, /*includePlayerColumn=*/false);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -600,15 +556,14 @@ void MainWindow::setupRecordTab()
 
     recordPlayerListTable = new QTableWidget;
     recordPlayerListTable->setColumnCount(5);
-    recordPlayerListTable->setHorizontalHeaderLabels({"", "닉네임", "칭호", "총판", "승률"});
+    recordPlayerListTable->setHorizontalHeaderLabels({"", "닉네임", "칭호", "승률", "총판"});
     recordPlayerListTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     recordPlayerListTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     recordPlayerListTable->setAlternatingRowColors(true);
     recordPlayerListTable->verticalHeader()->setVisible(false);
-    recordPlayerListTable->horizontalHeader()->setStretchLastSection(true);
     root->addWidget(recordPlayerListTable, 1);
 
-    tabs->insertTab(3, w, "🔍  플레이어 조회");
+    tabs->insertTab(2, w, "🔍  플레이어 조회");
 
     connect(searchBtn,        &QPushButton::clicked, this, &MainWindow::onRecordSearch);
     connect(recordSearchEdit, &QLineEdit::returnPressed, this, &MainWindow::onRecordSearch);
@@ -638,17 +593,10 @@ void MainWindow::setupMyRecordsTab()
     root->addLayout(topRow);
 
     myRecordsTable = new QTableWidget;
-    myRecordsTable->setColumnCount(5);
-    myRecordsTable->setHorizontalHeaderLabels({"ID","상대","결과","수","날짜"});
-    myRecordsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    myRecordsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    myRecordsTable->setAlternatingRowColors(true);
-    myRecordsTable->verticalHeader()->setVisible(false);
-    myRecordsTable->horizontalHeader()->setStretchLastSection(true);
-    myRecordsTable->setColumnHidden(0, true);  // ID는 내부용
+    RecordsTable::setupColumns(myRecordsTable, /*includePlayerColumn=*/true);
     root->addWidget(myRecordsTable, 1);
 
-    tabs->insertTab(2, w, "📊  전적");
+    tabs->insertTab(3, w, "📊  전적");
 
     connect(refreshBtn,           &QPushButton::clicked, this, &MainWindow::onMyRecordsRefresh);
     connect(myRecordsResultCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -709,7 +657,7 @@ void MainWindow::refreshRecordTable()
         int pid = p.id;
 
         // 0번 컬럼: 상세 버튼
-        auto* btn = new QPushButton("📋  상세");
+        auto* btn = new QPushButton("📋  상세보기");
         btn->setStyleSheet(detailBtnQss);
         btn->setCursor(Qt::PointingHandCursor);
         connect(btn, &QPushButton::clicked, this, [this, pid]() { onShowPlayerDetail(pid); });
@@ -722,15 +670,19 @@ void MainWindow::refreshRecordTable()
         };
         setC(1, p.nickname);
         setC(2, playerTitle(p.totalGames(), p.winRate()));
-        setC(3, QString::number(p.totalGames()));
-        setC(4, QString::number(p.winRate(), 'f', 1) + "%");
+        setC(3, QString::number(p.winRate(), 'f', 1) + "%");
+        setC(4, QString::number(p.totalGames()));
     }
-    recordPlayerListTable->setColumnWidth(0, 90);
-    recordPlayerListTable->resizeColumnToContents(2);
-    recordPlayerListTable->resizeColumnToContents(3);
-    recordPlayerListTable->resizeColumnToContents(4);
-    recordPlayerListTable->horizontalHeader()->setStretchLastSection(false);
-    recordPlayerListTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+
+    auto* hh = recordPlayerListTable->horizontalHeader();
+    hh->setStretchLastSection(false);
+    hh->setSectionResizeMode(0, QHeaderView::Fixed);
+    hh->setSectionResizeMode(1, QHeaderView::Fixed);
+    hh->setSectionResizeMode(2, QHeaderView::Stretch);
+    hh->setSectionResizeMode(3, QHeaderView::Stretch);
+    hh->setSectionResizeMode(4, QHeaderView::Stretch);
+    recordPlayerListTable->setColumnWidth(0, 130);
+    recordPlayerListTable->setColumnWidth(1, 120);
 }
 
 void MainWindow::onShowPlayerDetail(int playerId)
@@ -750,37 +702,13 @@ void MainWindow::onMyRecordsRefresh()
 void MainWindow::refreshMyRecordsTable()
 {
     if (!myRecordsTable) return;
-    if (loggedInPlayer_.id <= 0) {
-        myRecordsTable->setRowCount(0);
-        return;
-    }
 
     QString resultFilter = myRecordsResultCombo ? myRecordsResultCombo->currentText() : QString();
     if (resultFilter == "전체") resultFilter.clear();
 
-    auto records = Database::instance().readRecords(loggedInPlayer_.id, resultFilter);
-    myRecordsTable->setRowCount(records.size());
-    for (int i = 0; i < records.size(); ++i) {
-        const auto& r = records[i];
-        auto setC = [&](int col, const QString& t, QColor color = Qt::white) {
-            auto* it = new QTableWidgetItem(t);
-            it->setTextAlignment(Qt::AlignCenter);
-            it->setForeground(color);
-            myRecordsTable->setItem(i, col, it);
-        };
-        QColor rc = (r.result=="승") ? QColor(100,220,100)
-                  : (r.result=="패") ? QColor(220,100,100)
-                  : QColor(200,200,100);
-        QString opp = (r.opponent.compare("AI", Qt::CaseInsensitive) == 0)
-                    ? "AI 대전" : "멀티 - " + r.opponent;
-        setC(0, QString::number(r.id));
-        setC(1, opp);
-        setC(2, r.result, rc);
-        setC(3, QString::number(r.moves));
-        setC(4, r.playedAt.toString("yyyy-MM-dd hh:mm"));
-    }
-    myRecordsTable->resizeColumnsToContents();
-    myRecordsTable->horizontalHeader()->setStretchLastSection(true);
+    // 모든 유저의 기록을 시간순으로 (readRecords 가 played_at DESC 로 정렬)
+    auto records = Database::instance().readRecords(0, resultFilter);
+    RecordsTable::fill(myRecordsTable, records, /*includePlayerColumn=*/true);
 }
 
 void MainWindow::onDeleteMyRecord()
@@ -792,6 +720,18 @@ void MainWindow::onDeleteMyRecord()
         return;
     }
     int id = myRecordsTable->item(row, 0)->text().toInt();
+
+    // 본인 기록만 삭제 허용
+    auto all = Database::instance().readRecords(0);
+    int ownerId = 0;
+    for (const auto& r : all) {
+        if (r.id == id) { ownerId = r.playerId; break; }
+    }
+    if (ownerId != loggedInPlayer_.id) {
+        QMessageBox::warning(this, "알림", "본인의 기록만 삭제할 수 있습니다.");
+        return;
+    }
+
     if (QMessageBox::question(this, "확인", "이 기록을 삭제할까요?")
         != QMessageBox::Yes) return;
     if (!Database::instance().deleteRecord(id)) {
@@ -1083,10 +1023,10 @@ void MainWindow::updateHeaderStatus(const QString& text)
         ui->headerStatusLabel->setText("내 프로필");
         break;
     case 2:
-        ui->headerStatusLabel->setText("전적 확인");
+        ui->headerStatusLabel->setText("플레이어 조회");
         break;
     case 3:
-        ui->headerStatusLabel->setText("플레이어 조회");
+        ui->headerStatusLabel->setText("전적 확인");
         break;
     case 4:
         ui->headerStatusLabel->setText(netManager ? "멀티 연결 관리" : "멀티 대기");

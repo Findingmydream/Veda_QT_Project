@@ -33,6 +33,7 @@ bool Database::init()
 
     if (!ensurePlayerPasswordColumns()) return false;
     if (!ensurePlayerAvatarColumn())    return false;
+    if (!ensureRecordColumns())         return false;
 
     q.exec("CREATE TABLE IF NOT EXISTS records ("
            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -85,6 +86,23 @@ bool Database::ensurePlayerAvatarColumn()
     if (hasAvatar) return true;
     QSqlQuery q;
     return q.exec("ALTER TABLE players ADD COLUMN avatar_path TEXT DEFAULT ''");
+}
+
+bool Database::ensureRecordColumns()
+{
+    bool hasDur = false, hasStone = false;
+    QSqlQuery info("PRAGMA table_info(records)");
+    while (info.next()) {
+        QString name = info.value("name").toString();
+        if (name == "duration_seconds") hasDur   = true;
+        if (name == "my_stone")         hasStone = true;
+    }
+    QSqlQuery q;
+    if (!hasDur && !q.exec("ALTER TABLE records ADD COLUMN duration_seconds INTEGER DEFAULT 0"))
+        return false;
+    if (!hasStone && !q.exec("ALTER TABLE records ADD COLUMN my_stone INTEGER DEFAULT 0"))
+        return false;
+    return true;
 }
 
 QString Database::makePasswordSalt() const
@@ -273,7 +291,8 @@ bool Database::playerExists(const QString& nickname)
 
 // ── GameRecord CRUD ───────────────────────────────────────────────────────────
 bool Database::createRecord(int playerId, const QString& opponent,
-                             const QString& result, int moves)
+                             const QString& result, int moves,
+                             int durationSeconds, int myStone)
 {
     // 플레이어 승/패/무 카운트 업데이트
     QString col = (result == "승") ? "wins" : (result == "패") ? "losses" : "draws";
@@ -284,14 +303,17 @@ bool Database::createRecord(int playerId, const QString& opponent,
 
     Player p = readPlayer(playerId);
     QSqlQuery q;
-    q.prepare("INSERT INTO records (player_id,player_name,opponent,result,moves,played_at) "
-              "VALUES (:pid,:pn,:op,:r,:m,:d)");
+    q.prepare("INSERT INTO records "
+              "(player_id,player_name,opponent,result,moves,duration_seconds,my_stone,played_at) "
+              "VALUES (:pid,:pn,:op,:r,:m,:dur,:st,:dt)");
     q.bindValue(":pid", playerId);
     q.bindValue(":pn",  p.nickname);
     q.bindValue(":op",  opponent);
     q.bindValue(":r",   result);
     q.bindValue(":m",   moves);
-    q.bindValue(":d",   QDateTime::currentDateTime().toString(Qt::ISODate));
+    q.bindValue(":dur", durationSeconds);
+    q.bindValue(":st",  myStone);
+    q.bindValue(":dt",  QDateTime::currentDateTime().toString(Qt::ISODate));
     return q.exec();
 }
 
@@ -311,13 +333,15 @@ QVector<GameRecord> Database::readRecords(int playerId, const QString& result)
 
     while (q.next()) {
         GameRecord r;
-        r.id         = q.value("id").toInt();
-        r.playerId   = q.value("player_id").toInt();
-        r.playerName = q.value("player_name").toString();
-        r.opponent   = q.value("opponent").toString();
-        r.result     = q.value("result").toString();
-        r.moves      = q.value("moves").toInt();
-        r.playedAt   = QDateTime::fromString(q.value("played_at").toString(), Qt::ISODate);
+        r.id              = q.value("id").toInt();
+        r.playerId        = q.value("player_id").toInt();
+        r.playerName      = q.value("player_name").toString();
+        r.opponent        = q.value("opponent").toString();
+        r.result          = q.value("result").toString();
+        r.moves           = q.value("moves").toInt();
+        r.durationSeconds = q.value("duration_seconds").toInt();
+        r.myStone         = q.value("my_stone").toInt();
+        r.playedAt        = QDateTime::fromString(q.value("played_at").toString(), Qt::ISODate);
         list.append(r);
     }
     return list;
