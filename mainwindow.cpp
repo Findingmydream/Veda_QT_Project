@@ -841,8 +841,7 @@ void MainWindow::onNetPeerConnected()
 
 void MainWindow::onNetPeerDisconnected()
 {
-    // 호스트/도전자 중 한쪽이 끊어져도 남은 쪽 앱은 멀티 로비로 복귀만 하도록 공통 처리 사용.
-    handleRoomLeft("🔴  상대방 연결 끊김");
+    handlePeerLeft("🔴  상대방 연결 끊김");
 }
 
 void MainWindow::onNetError(QString err)
@@ -921,7 +920,7 @@ void MainWindow::onNetMessage(QJsonObject obj)
         handleRoomLeft("상대방이 재도전을 거절했습니다.");
     }
     else if (t == "leave") {
-        handleRoomLeft("상대방이 방을 나갔습니다.");
+        handlePeerLeft("상대방이 방을 나갔습니다.");
     }
     else {
         game->handleNetMessage(obj);
@@ -1021,6 +1020,41 @@ void MainWindow::tryStartRematch()
     msg["whiteName"] = whiteName;
     netManager->sendJson(msg);
     startNetworkGameWithStone(hostStone, blackName, whiteName);
+}
+
+void MainWindow::handlePeerLeft(const QString& message)
+{
+    if (iAmHost && netManager && netManager->isHosting()) {
+        netManager->closePeer();
+
+        if (game) game->resetToIdle();
+        localRematchRequested = false;
+        remoteRematchRequested = false;
+        remotePlayerName.clear();
+        currentOpponentName = "AI";
+
+        ui->pauseBtn->setEnabled(false);
+        ui->pauseBtn->setText("⏸  일시정지");
+        ui->rematchBtn->setVisible(false);
+        ui->leaveRoomBtn->setVisible(false);
+        ui->firstRadio->setEnabled(true);
+        ui->secondRadio->setEnabled(true);
+        multiStartBtn->setEnabled(false);
+        connectBtn->setEnabled(false);
+        cancelBtn->setEnabled(true);
+        playerListLabel->setText(
+            QString("🔵  %1  (나)\n(상대 대기 중)").arg(multiPlayerCombo->currentText()));
+        netStatusLabel->setText(message + "\n상대방 접속 기다리는 중");
+        netStatusLabel->setStyleSheet("color:#ffcc00; border:1px solid #555; border-radius:6px; padding:10px;");
+        statusLabel->setText(message);
+        updateHeaderStatus("멀티 방 대기 중");
+
+        int multiIdx = tabs->indexOf(ui->multiTab);
+        if (multiIdx >= 0) tabs->setCurrentIndex(multiIdx);
+        return;
+    }
+
+    handleRoomLeft(message);
 }
 
 void MainWindow::handleRoomLeft(const QString& message)

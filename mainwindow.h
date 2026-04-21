@@ -66,6 +66,7 @@ private:
     void startNetworkGameWithStone(int myStone, const QString& blackName = QString(),
                                    const QString& whiteName = QString());
     void tryStartRematch();
+    void handlePeerLeft(const QString& message);
     void handleRoomLeft(const QString& message);
     void applyLoggedInPlayer(const Player& player);
     void updateHeaderStatus(const QString& text = QString());

@@ -50,6 +50,7 @@ void NetworkManager::onDisconnected()
     QTcpSocket* disconnectedSocket = qobject_cast<QTcpSocket*>(sender());
     if (disconnectedSocket && disconnectedSocket == sock) {
         sock = nullptr;
+        recvBuf.clear();
         disconnectedSocket->deleteLater();
     }
     emit peerDisconnected();
@@ -79,9 +80,22 @@ void NetworkManager::sendJson(const QJsonObject& obj)
     sock->flush();
 }
 
+void NetworkManager::closePeer()
+{
+    if (!sock) return;
+
+    QTcpSocket* peer = sock;
+    sock = nullptr;
+    recvBuf.clear();
+    QObject::disconnect(peer, nullptr, this, nullptr);
+    if (peer->state() != QAbstractSocket::UnconnectedState)
+        peer->disconnectFromHost();
+    peer->deleteLater();
+}
+
 void NetworkManager::closeAll()
 {
-    if (sock)   { sock->disconnectFromHost();  sock->deleteLater();   sock   = nullptr; }
+    closePeer();
     if (server) { server->close();             server->deleteLater(); server = nullptr; }
 }
 

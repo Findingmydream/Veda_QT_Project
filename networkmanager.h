@@ -15,6 +15,7 @@ public:
     bool host(quint16 port);
     void join(const QString& addr, quint16 port);
     void sendJson(const QJsonObject& obj);
+    void closePeer();
     void closeAll();
 
     bool isConnected() const;
