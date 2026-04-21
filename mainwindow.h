@@ -36,6 +36,7 @@ private slots:
     void onNickEditToggle();
     void onAvatarEditClicked();
     void onAvatarCaptureClicked();
+    void onDeleteAccount();
     void onOpponentSearch();
 
     // ── 플레이어 조회 탭 ──────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ private:
     QLabel*       profileAvatar        = nullptr;
     QPushButton*  avatarEditBtn        = nullptr;
     QPushButton*  avatarCaptureBtn     = nullptr;
+    QPushButton*  accountDeleteBtn     = nullptr;
     QLabel*       profileNickLabel     = nullptr;
     QLineEdit*    profileNickEdit      = nullptr;   // 인라인 편집용
     QPushButton*  nickEditBtn          = nullptr;

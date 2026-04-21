@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QCryptographicHash>
 #include <QRandomGenerator>
+#include "titles.h"
 
 Database& Database::instance() { static Database inst; return inst; }
 
@@ -267,10 +268,47 @@ bool Database::updatePlayer(int id, const QString& nickname, const QString& comm
 
 bool Database::deletePlayer(int id)
 {
+    if (id <= 0) return false;
+
+    Player p = readPlayer(id);
+    if (p.id <= 0) return false;
+
+    QSqlDatabase db = QSqlDatabase::database();
+    if (!db.transaction()) return false;
+
+    QSqlQuery records;
+    records.prepare("DELETE FROM records WHERE player_id=:id");
+    records.bindValue(":id", id);
+    if (!records.exec()) {
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery ownFriends;
+    ownFriends.prepare("DELETE FROM friends WHERE player_id=:id");
+    ownFriends.bindValue(":id", id);
+    if (!ownFriends.exec()) {
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery friendRefs;
+    friendRefs.prepare("DELETE FROM friends WHERE friend_name=:name");
+    friendRefs.bindValue(":name", p.nickname);
+    if (!friendRefs.exec()) {
+        db.rollback();
+        return false;
+    }
+
     QSqlQuery q;
     q.prepare("DELETE FROM players WHERE id=:id");
     q.bindValue(":id", id);
-    return q.exec();
+    if (!q.exec()) {
+        db.rollback();
+        return false;
+    }
+
+    return db.commit();
 }
 
 bool Database::setPlayerAvatar(int id, const QString& avatarPath)
@@ -331,10 +369,18 @@ bool Database::createRecord(int playerId, const QString& opponent,
 QVector<GameRecord> Database::readRecords(int playerId, const QString& result)
 {
     QVector<GameRecord> list;
-    QString sql = "SELECT * FROM records WHERE 1=1";
-    if (playerId > 0)     sql += " AND player_id=:pid";
-    if (!result.isEmpty()) sql += " AND result=:r";
-    sql += " ORDER BY played_at DESC";
+    QString sql =
+        "SELECT r.*, "
+        "op.id AS opponent_id, "
+        "op.wins AS opponent_wins, "
+        "op.losses AS opponent_losses, "
+        "op.draws AS opponent_draws "
+        "FROM records r "
+        "LEFT JOIN players op ON op.nickname = r.opponent "
+        "WHERE 1=1";
+    if (playerId > 0)     sql += " AND r.player_id=:pid";
+    if (!result.isEmpty()) sql += " AND r.result=:r";
+    sql += " ORDER BY r.played_at DESC";
 
     QSqlQuery q;
     q.prepare(sql);
@@ -352,6 +398,17 @@ QVector<GameRecord> Database::readRecords(int playerId, const QString& result)
         r.moves           = q.value("moves").toInt();
         r.durationSeconds = q.value("duration_seconds").toInt();
         r.myStone         = q.value("my_stone").toInt();
+        const int opponentId = q.value("opponent_id").toInt();
+        if (opponentId > 0) {
+            const int wins = q.value("opponent_wins").toInt();
+            const int losses = q.value("opponent_losses").toInt();
+            const int draws = q.value("opponent_draws").toInt();
+            const int total = wins + losses + draws;
+            const double rate = total > 0 ? (wins * 100.0 / total) : 0.0;
+            r.opponentTitle = playerTitle(total, rate);
+        } else {
+            r.opponentTitle = "-";
+        }
         r.playedAt        = QDateTime::fromString(q.value("played_at").toString(), Qt::ISODate);
         list.append(r);
     }

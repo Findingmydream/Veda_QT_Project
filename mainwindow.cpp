@@ -264,8 +264,11 @@ void MainWindow::setupProfileTab()
     avatarBtnRow->setSpacing(4);
     avatarEditBtn    = new QPushButton("📷  사진 변경");
     avatarCaptureBtn = new QPushButton("📸  사진 생성");
+    accountDeleteBtn = new QPushButton("계정 삭제");
     avatarBtnRow->addWidget(avatarEditBtn);
     avatarBtnRow->addWidget(avatarCaptureBtn);
+    avatarBtnRow->addStretch(1);
+    avatarBtnRow->addWidget(accountDeleteBtn);
     avatarCol->addLayout(avatarBtnRow);
     headerRow->addLayout(avatarCol, 0);
 
@@ -355,6 +358,7 @@ void MainWindow::setupProfileTab()
 
     connect(avatarEditBtn,     &QPushButton::clicked, this, &MainWindow::onAvatarEditClicked);
     connect(avatarCaptureBtn,  &QPushButton::clicked, this, &MainWindow::onAvatarCaptureClicked);
+    connect(accountDeleteBtn,  &QPushButton::clicked, this, &MainWindow::onDeleteAccount);
     connect(nickEditBtn,       &QPushButton::clicked, this, &MainWindow::onNickEditToggle);
     connect(profileNickEdit,   &QLineEdit::returnPressed, this, &MainWindow::onNickEditToggle);
     connect(opponentSearchBtn, &QPushButton::clicked, this, &MainWindow::onOpponentSearch);
@@ -370,6 +374,50 @@ void MainWindow::onAvatarEditClicked()
     Database::instance().setPlayerAvatar(loggedInPlayer_.id, path);
     loggedInPlayer_ = Database::instance().readPlayer(loggedInPlayer_.id);
     refreshProfile();
+}
+
+void MainWindow::onDeleteAccount()
+{
+    if (loggedInPlayer_.id <= 0) {
+        QMessageBox::warning(this, "알림", "로그인된 계정 정보가 없습니다.");
+        return;
+    }
+
+    if (accountDeleteBtn) accountDeleteBtn->setEnabled(false);
+
+    if (QMessageBox::warning(this, "계정 삭제", "정말로 삭제하시겠습니까?",
+                             QMessageBox::Yes | QMessageBox::No,
+                             QMessageBox::No) != QMessageBox::Yes) {
+        if (accountDeleteBtn) accountDeleteBtn->setEnabled(true);
+        return;
+    }
+
+    if (netManager) {
+        netManager->closeAll();
+        netManager->deleteLater();
+        netManager = nullptr;
+    }
+
+    const int playerId = loggedInPlayer_.id;
+    if (!Database::instance().deletePlayer(playerId)) {
+        QMessageBox::warning(this, "알림", "계정 삭제에 실패했습니다.");
+        if (accountDeleteBtn) accountDeleteBtn->setEnabled(true);
+        return;
+    }
+
+    loggedInPlayer_ = Player();
+    selectedOpponent_.clear();
+
+    hide();
+    LoginDialog login;
+    if (login.exec() == QDialog::Accepted) {
+        applyLoggedInPlayer(login.loggedInPlayer());
+        if (accountDeleteBtn) accountDeleteBtn->setEnabled(true);
+        show();
+        tabs->setCurrentIndex(0);
+    } else {
+        close();
+    }
 }
 
 void MainWindow::onAvatarCaptureClicked()

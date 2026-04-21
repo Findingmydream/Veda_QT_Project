@@ -96,7 +96,7 @@ void setupColumns(QTableWidget* table, bool includePlayerColumn)
     QStringList headers;
     headers << "ID";
     if (includePlayerColumn) headers << "플레이어";
-    headers << "모드" << "결과" << "내 돌" << "상대" << "수" << "게임시간" << "날짜";
+    headers << "모드" << "결과" << "내 돌" << "상대" << "상대 칭호" << "수" << "게임시간" << "날짜";
 
     table->setColumnCount(headers.size());
     table->setHorizontalHeaderLabels(headers);
@@ -117,7 +117,7 @@ void setupColumns(QTableWidget* table, bool includePlayerColumn)
     table->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     // 다른 컬럼은 내용 크기에 맞춤. "상대" 컬럼만 Stretch 로 남는 공간을 채움.
-    // 컬럼 순서: ID / [플레이어] / 모드 / 결과 / 내 돌 / 상대 / 수 / 게임시간 / 날짜
+    // 컬럼 순서: ID / [플레이어] / 모드 / 결과 / 내 돌 / 상대 / 상대 칭호 / 수 / 게임시간 / 날짜
     int oppCol = includePlayerColumn ? 5 : 4;
     for (int c = 0; c < table->columnCount(); ++c)
         hh->setSectionResizeMode(c, QHeaderView::ResizeToContents);
@@ -151,6 +151,7 @@ void fill(QTableWidget* table, const QVector<GameRecord>& records, bool includeP
         setC(col++, r.result, rc);
         setC(col++, stone);
         setC(col++, opp);
+        setC(col++, r.opponentTitle.isEmpty() ? QString("-") : r.opponentTitle);
         setC(col++, QString::number(r.moves));
         setC(col++, formatDuration(r.durationSeconds));
         setC(col++, r.playedAt.toString("yyyy-MM-dd"));
